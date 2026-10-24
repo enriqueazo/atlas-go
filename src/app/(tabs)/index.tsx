@@ -1,7 +1,7 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useNavigation } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { Animated, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, BackHandler, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { OptionCard, type OptionStatus } from '@/components/OptionCard';
@@ -40,6 +40,9 @@ export default function Game() {
   const recent = useRef<string[]>([]);
   // Whether this run already passed the record, so the fanfare plays once.
   const celebrated = useRef(false);
+  const scroll = useRef<ScrollViewInstance>(null);
+  // The page holds still while a finger moves the map.
+  const [onMap, setOnMap] = useState(false);
   const progress = useBoardProgress(WORLD_BOARD);
   const complete = useCompleteGame(WORLD_BOARD, progress, play);
 
@@ -69,6 +72,7 @@ export default function Game() {
 
   const start = (m: Play) => {
     play('zoom');
+    scroll.current?.scrollTo({ y: 0, animated: false });
     if (m === 'complete') {
       setMode(m);
       complete.start();
@@ -160,6 +164,15 @@ export default function Game() {
   return (
     <Screen>
       <SafeAreaView style={styles.safe} edges={['top']}>
+        {/* Scrolls when the lobby is taller than the screen; dragging the map
+            still moves the map. */}
+        <ScrollView
+          ref={scroll}
+          contentContainerStyle={styles.content}
+          scrollEnabled={!onMap}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
         {painting ? (
           <View style={styles.header}>
             <Pressable accessibilityRole="button" accessibilityLabel={t.close} onPress={quit} hitSlop={12}>
@@ -204,9 +217,15 @@ export default function Game() {
               status="ask"
               paint={{ filled: progress.filled, flash: complete.flash }}
               onTap={complete.tap}
+              onGesture={setOnMap}
             />
           ) : (
-            <WorldMap focus={question?.target ?? null} mode={mode ?? 'countries'} status={status} />
+            <WorldMap
+              focus={question?.target ?? null}
+              mode={mode ?? 'countries'}
+              status={status}
+              onGesture={setOnMap}
+            />
           )}
         </View>
 
@@ -278,6 +297,7 @@ export default function Game() {
             ))}
           </View>
         )}
+        </ScrollView>
       </SafeAreaView>
     </Screen>
   );
@@ -441,6 +461,7 @@ const useThemed = themed((colors) => ({
   colors,
   styles: StyleSheet.create({
     safe: { flex: 1 },
+    content: { flexGrow: 1 },
     hero: { flexDirection: 'row', alignItems: 'center', gap: space(4), paddingTop: space(6), paddingBottom: space(5) },
     logo: {
       width: 64,

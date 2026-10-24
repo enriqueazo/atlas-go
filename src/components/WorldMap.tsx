@@ -33,6 +33,8 @@ type Props = {
   paint?: { filled: ReadonlySet<string>; flash: Flash | null };
   /** A tap (not a drag) at map point (x, y); `px` is map units per screen pixel. */
   onTap?: (x: number, y: number, px: number) => void;
+  /** A finger is dragging or pinching the map, so a scroll view around it should hold still. */
+  onGesture?: (active: boolean) => void;
 };
 
 const DURATION = 850;
@@ -107,7 +109,7 @@ const touchesOf = (e: GestureResponderEvent): Touch[] =>
 const COLOR_OF = new Map(LAND.map((l) => [l.iso, l.c]));
 const TINY = COUNTRIES.filter((c) => c.tiny);
 
-export function WorldMap({ focus, mode, status, paint, onTap }: Props) {
+export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props) {
   const c = useColors();
   const { t } = useSettings();
   // Whether the player has dragged or zoomed away from where the game put
@@ -124,6 +126,8 @@ export function WorldMap({ focus, mode, status, paint, onTap }: Props) {
   sizeRef.current = size;
   const onTapRef = useRef(onTap);
   onTapRef.current = onTap;
+  const onGestureRef = useRef(onGesture);
+  onGestureRef.current = onGesture;
 
   const measure = () =>
     view.current?.measure((_x, _y, _w, _h, pageX, pageY) => {
@@ -173,6 +177,7 @@ export function WorldMap({ focus, mode, status, paint, onTap }: Props) {
       onMoveShouldSetPanResponder: () => true,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (e) => {
+        onGestureRef.current?.(true);
         measure();
         begin(e);
         const touches = touchesOf(e);
@@ -211,6 +216,7 @@ export function WorldMap({ focus, mode, status, paint, onTap }: Props) {
         );
       },
       onPanResponderRelease: () => {
+        onGestureRef.current?.(false);
         gesture.current = null;
         const s = tap.current;
         const f = current.current;
@@ -220,6 +226,7 @@ export function WorldMap({ focus, mode, status, paint, onTap }: Props) {
         onTapRef.current(f.x + (s.x - origin.current.x) * k, f.y + (s.y - origin.current.y) * k, k);
       },
       onPanResponderTerminate: () => {
+        onGestureRef.current?.(false);
         gesture.current = null;
       },
     });
