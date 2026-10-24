@@ -38,6 +38,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: t.tabGame, tabBarLabel: label(t.tabGame), tabBarIcon: icon('gamepad-variant') }} />
       <Tabs.Screen name="ranking" options={{ title: t.tabRanking, tabBarLabel: label(t.tabRanking), tabBarIcon: icon('podium') }} />
+      <Tabs.Screen name="progress" options={{ title: t.tabProgress, tabBarLabel: label(t.tabProgress), tabBarIcon: icon('chart-line') }} />
       <Tabs.Screen name="settings" options={{ title: t.tabSettings, tabBarLabel: label(t.tabSettings), tabBarIcon: icon('cog') }} />
     </Tabs>
   );

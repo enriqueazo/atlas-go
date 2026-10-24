@@ -11,6 +11,7 @@ import { WorldMap } from '@/components/WorldMap';
 import { formatTime, WORLD_BOARD } from '@/game/complete';
 import { levelFor, MAX_LEVEL, nextQuestion, optionLabel, PER_LEVEL, pointsFor, type Question } from '@/game/engine';
 import { useBoardProgress } from '@/game/progress';
+import { trackAnswer, trackRun } from '@/game/stats';
 import { useCompleteGame } from '@/game/useCompleteGame';
 import { BY_ISO } from '@/game/world';
 import { useSettings, type Mode } from '@/settings';
@@ -40,6 +41,8 @@ export default function Game() {
   const recent = useRef<string[]>([]);
   // Whether this run already passed the record, so the fanfare plays once.
   const celebrated = useRef(false);
+  // Each run is saved under its own id as it grows, for the Ranking tab.
+  const runId = useRef(0);
   const scroll = useRef<ScrollViewInstance>(null);
   // The page holds still while a finger moves the map.
   const [onMap, setOnMap] = useState(false);
@@ -84,6 +87,7 @@ export default function Game() {
     setStreak(0);
     setIsRecord(false);
     celebrated.current = false;
+    runId.current = Date.now();
     ask(m, 0);
   };
 
@@ -97,6 +101,7 @@ export default function Game() {
   const answer = (i: number) => {
     if (!question || !mode || mode === 'complete' || picked !== null) return;
     setPicked(i);
+    trackAnswer({ mode, iso: question.target.iso, correct: i === question.answer });
     if (i === question.answer) {
       const pts = pointsFor(question);
       const total = points + pts;
@@ -109,6 +114,7 @@ export default function Game() {
       setGained(pts);
       setPoints(total);
       setStreak(streak + 1);
+      trackRun(mode, { id: runId.current, points: total, streak: streak + 1, at: Date.now() });
       setIsRecord(fanfare);
       play(fanfare ? 'record' : 'correct');
     } else {
@@ -116,6 +122,8 @@ export default function Game() {
       setStreak(0);
       setIsRecord(false);
       celebrated.current = false;
+      // A miss ends the run; the next answer starts a new one.
+      runId.current = Date.now();
       play('wrong');
     }
   };

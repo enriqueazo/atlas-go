@@ -17,6 +17,25 @@ type Saved = {
 const EMPTY: Saved = { filled: [], misses: 0, ms: 0, best: null };
 const key = (board: Board) => `atlas-go/complete/${board.id}/v1`;
 
+/** A board's saved progress; the Progress tab reads it too. */
+export async function loadBoard(board: Board): Promise<Saved> {
+  try {
+    const raw = await AsyncStorage.getItem(key(board));
+    if (!raw) return EMPTY;
+    const s = JSON.parse(raw) as Partial<Saved>;
+    // Drop places the board no longer has, in case the map data changes.
+    const known = new Set(board.regions.map((r) => r.iso));
+    return {
+      filled: (s.filled ?? []).filter((iso) => known.has(iso)),
+      misses: s.misses ?? 0,
+      ms: s.ms ?? 0,
+      best: s.best ?? null,
+    };
+  } catch {
+    return EMPTY;
+  }
+}
+
 /** How far the player got filling in a board, saved on the device. */
 export function useBoardProgress(board: Board) {
   const [saved, setSaved] = useState<Saved>(EMPTY);
@@ -25,20 +44,8 @@ export function useBoardProgress(board: Board) {
   useEffect(() => {
     setReady(false);
     setSaved(EMPTY);
-    AsyncStorage.getItem(key(board))
-      .then((raw) => {
-        if (!raw) return;
-        const s = JSON.parse(raw) as Partial<Saved>;
-        // Drop places the board no longer has, in case the map data changes.
-        const known = new Set(board.regions.map((r) => r.iso));
-        setSaved({
-          filled: (s.filled ?? []).filter((iso) => known.has(iso)),
-          misses: s.misses ?? 0,
-          ms: s.ms ?? 0,
-          best: s.best ?? null,
-        });
-      })
-      .catch(() => {})
+    loadBoard(board)
+      .then(setSaved)
       .finally(() => setReady(true));
   }, [board]);
 
