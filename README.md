@@ -28,10 +28,10 @@ npx expo start        # then press i, a or w
 
 ## Project layout
 
-- `src/app/`: screens (Expo Router tabs): `index.tsx` game and lobby, `ranking.tsx`, `settings.tsx`.
+- `src/app/(tabs)/`: the tab screens: `index.tsx` lobby and game, `ranking.tsx`, `settings.tsx`.
 - `src/components/WorldMap.tsx`: the SVG map and its camera (zoom and fly between countries).
 - `src/game/engine.ts`: question picking, levels and points.
-- `src/theme.tsx`: the Vocablo design tokens (both themes), type scale and `themed()` styles.
+- `src/theme.tsx`, `src/components/ui.tsx`, `src/components/OptionCard.tsx`: ported from Vocablo (`enriqueazo/e-e`), plus the map colours. Styles follow Vocablo's `themed((colors) => ({ colors, styles }))` pattern.
 - `src/i18n.ts`: every user-visible string in Spanish and English.
 - `src/data/world.json`: generated map and country data; don't edit by hand.
 

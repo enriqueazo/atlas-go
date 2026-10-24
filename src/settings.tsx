@@ -2,20 +2,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { deviceLang, strings, type Lang, type Strings } from '@/i18n';
-import { ThemeProvider, type ThemeName } from '@/theme';
 
 export type Mode = 'countries' | 'capitals';
-export type SoundLevel = 'off' | 'low' | 'medium' | 'high';
+export type Volume = 'off' | 'low' | 'medium' | 'high';
 
+// The appearance lives in the theme (see theme.tsx), like in Vocablo.
 type Stored = {
-  theme: 'system' | ThemeName;
-  sound: SoundLevel;
+  sound: Volume;
   lang: 'system' | Lang;
   records: Record<Mode, number>;
 };
 
 const DEFAULTS: Stored = {
-  theme: 'system',
   sound: 'medium',
   lang: 'system',
   records: { countries: 0, capitals: 0 },
@@ -67,11 +65,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return { ...state, ready, language, t: strings[language], update, saveRecord };
   }, [state, ready, update, saveRecord]);
 
-  return (
-    <SettingsContext.Provider value={value}>
-      <ThemeProvider choice={state.theme}>{children}</ThemeProvider>
-    </SettingsContext.Provider>
-  );
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
 
 export function useSettings() {

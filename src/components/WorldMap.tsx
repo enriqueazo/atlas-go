@@ -4,7 +4,7 @@ import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 
 import { LAND, MAP_HEIGHT, MAP_WIDTH, type Country } from '@/game/world';
 import type { Mode } from '@/settings';
-import { radius, useTheme, type Palette } from '@/theme';
+import { radius, useColors, type Palette } from '@/theme';
 
 type Frame = { x: number; y: number; w: number; h: number };
 export type MapStatus = 'ask' | 'right' | 'wrong';
@@ -26,7 +26,7 @@ function frameFor(focus: Country | null, aspect: number): Frame {
   }
   const [bx, by, bw, bh] = focus.box;
   // Leave room around the country so its neighbours give context.
-  const context = focus.tiny ? 130 : focus.tier >= 5 ? 110 : 80;
+  const context = focus.tiny ? 130 : 110;
   const pad = Math.max(bw, bh) > 150 ? 1.35 : 2.2;
   const w = Math.min(Math.max(bw * pad, bh * pad * aspect, context), MAP_WIDTH * 1.04);
   const h = w / aspect;
@@ -35,7 +35,7 @@ function frameFor(focus: Country | null, aspect: number): Frame {
 }
 
 export function WorldMap({ focus, mode, status }: Props) {
-  const { c } = useTheme();
+  const c = useColors();
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [frame, setFrame] = useState<Frame | null>(null);
   const current = useRef<Frame | null>(null);

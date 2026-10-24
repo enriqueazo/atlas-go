@@ -1,67 +1,71 @@
-// Vocablo design system, adapted for Atlas Go. Colour, spacing and radius
-// values come from Vocablo's tokens; the map palette is Atlas Go's own.
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import { StyleSheet, useColorScheme, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useColorScheme } from 'react-native';
 
+// Vocablo's two palettes (soft blacks, purples, greens and soft whites), plus
+// the colours of Atlas Go's cartoon map. Dark is the original look; light
+// swaps the soft blacks and whites.
 const dark = {
   bg: '#121016',
-  surface: '#1c1922',
-  surfaceRaised: '#26222e',
-  border: '#332d3d',
-  text: '#f4f1fa',
-  textMuted: '#a39db0',
-  purple: '#8b5cf6',
-  purpleSoft: '#b79cff',
-  purpleDeep: '#5b3bc4',
-  green: '#34d399',
-  greenSoft: '#1e3b32',
-  wrong: '#e879a6',
-  wrongSoft: '#3a2230',
-  glow: '#1e1530',
-  tint: '#2c2342',
-  hintBg: '#211a30',
-  onPurple: '#ffffff',
-  // Map
-  ocean: '#1a1c33',
+  surface: '#1C1922',
+  surfaceRaised: '#26222E',
+  border: '#332D3D',
+  text: '#F4F1FA',
+  textMuted: '#A39DB0',
+  purple: '#8B5CF6',
+  purpleSoft: '#B79CFF',
+  purpleDeep: '#5B3BC4',
+  green: '#34D399',
+  greenSoft: '#1E3B32',
+  wrong: '#E879A6',
+  wrongSoft: '#3A2230',
+  /** Top of the screen gradient. */
+  glow: '#1E1530',
+  /** Purple-tinted surface: chips, your row in a table. */
+  tint: '#2C2342',
+  /** Text and icons on a purple button. */
+  onPurple: '#FFFFFF',
+  /** Map: sea, the little waves on it, the drop shadow under the land and the borders. */
+  ocean: '#1A1C33',
   oceanDeep: '#151629',
-  landShadow: '#0c0d1c',
+  landShadow: '#0C0D1C',
   landStroke: '#121016',
-  land: ['#6e5aa8', '#3f8f7a', '#4f74b0', '#a8607f', '#9c8a4e'],
-  highlight: '#c4abff',
-  marker: '#ffffff',
+  /** Map: five country fills, picked so neighbours never match. */
+  land: ['#6E5AA8', '#3F8F7A', '#4F74B0', '#A8607F', '#9C8A4E'],
+  /** Map: the country being asked and the capital dot. */
+  highlight: '#C4ABFF',
+  marker: '#FFFFFF',
 };
 
 export type Palette = typeof dark;
 
 const light: Palette = {
-  bg: '#f7f5fb',
-  surface: '#ffffff',
-  surfaceRaised: '#efebf7',
-  border: '#e2dbef',
-  text: '#1c1922',
-  textMuted: '#6b6478',
-  purple: '#7c4deb',
-  purpleSoft: '#6a3fd6',
-  purpleDeep: '#dcd0fa',
-  green: '#16a372',
-  greenSoft: '#ddf4ea',
-  wrong: '#d14d85',
-  wrongSoft: '#fbe4ee',
-  glow: '#ece4fc',
-  tint: '#ede6fc',
-  hintBg: '#f3eefd',
-  onPurple: '#ffffff',
-  ocean: '#cfe9fb',
-  oceanDeep: '#bfe0f7',
-  landShadow: '#9cc3e3',
-  landStroke: '#4a4360',
-  land: ['#ffd98a', '#9be5bd', '#a8cdff', '#ffb3cc', '#d2bfff'],
-  highlight: '#7c4deb',
-  marker: '#7c4deb',
+  bg: '#F7F5FB',
+  surface: '#FFFFFF',
+  surfaceRaised: '#EFEBF7',
+  border: '#E2DBEF',
+  text: '#1C1922',
+  textMuted: '#6B6478',
+  purple: '#7C4DEB',
+  purpleSoft: '#6A3FD6',
+  purpleDeep: '#DCD0FA',
+  green: '#16A372',
+  greenSoft: '#DDF4EA',
+  wrong: '#D14D85',
+  wrongSoft: '#FBE4EE',
+  glow: '#ECE4FC',
+  tint: '#EDE6FC',
+  onPurple: '#FFFFFF',
+  ocean: '#CFE9FB',
+  oceanDeep: '#BFE0F7',
+  landShadow: '#9CC3E3',
+  landStroke: '#4A4360',
+  land: ['#FFD98A', '#9BE5BD', '#A8CDFF', '#FFB3CC', '#D2BFFF'],
+  highlight: '#7C4DEB',
+  marker: '#7C4DEB',
 };
 
-export const palettes = { dark, light };
-export type ThemeName = keyof typeof palettes;
+export const PALETTES = { dark, light };
 
 export const fonts = {
   regular: 'Nunito_500Medium',
@@ -70,65 +74,81 @@ export const fonts = {
 };
 
 export const radius = { sm: 10, md: 18, lg: 28, pill: 999 };
-
 export const space = (n: number) => n * 4;
 
-// Type scale from the Vocablo guide.
-export const type = {
-  score: { fontFamily: fonts.heavy, fontSize: 72, lineHeight: 79 },
-  title: { fontFamily: fonts.heavy, fontSize: 32, lineHeight: 38 },
-  titleSub: { fontFamily: fonts.heavy, fontSize: 24, lineHeight: 29 },
-  verdict: { fontFamily: fonts.heavy, fontSize: 20, lineHeight: 24 },
-  button: { fontFamily: fonts.heavy, fontSize: 18, lineHeight: 22, letterSpacing: 0.3 },
-  cardTitle: { fontFamily: fonts.heavy, fontSize: 18, lineHeight: 23 },
-  counter: { fontFamily: fonts.heavy, fontSize: 17, lineHeight: 20, fontVariant: ['tabular-nums'] as ['tabular-nums'] },
-  option: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 22 },
-  label: { fontFamily: fonts.bold, fontSize: 15, lineHeight: 21 },
-  body: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 21 },
-  small: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
-  chip: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 18 },
-  caption: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 18, letterSpacing: 0.3 },
-} satisfies Record<string, TextStyle>;
+/** 'system' follows the phone (light or dark); the others pick one. */
+export type ThemeSetting = 'system' | 'light' | 'dark';
+export type Scheme = 'light' | 'dark';
 
-export const tabBarStyle = (c: Palette) => ({
-  backgroundColor: c.surface,
-  borderTopColor: c.border,
-  borderTopWidth: 1,
-  minHeight: 62,
-  paddingTop: 6,
+const KEY = 'theme';
+
+type ThemeState = {
+  scheme: Scheme;
+  colors: Palette;
+  setting: ThemeSetting;
+  setSetting: (s: ThemeSetting) => void;
+};
+
+const ThemeContext = createContext<ThemeState>({
+  scheme: 'dark',
+  colors: dark,
+  setting: 'system',
+  setSetting: () => {},
 });
 
-type ThemeValue = { name: ThemeName; c: Palette };
-const ThemeContext = createContext<ThemeValue>({ name: 'dark', c: dark });
+export function resolveScheme(setting: ThemeSetting, system: string | null | undefined): Scheme {
+  if (setting !== 'system') return setting;
+  return system === 'light' ? 'light' : 'dark';
+}
 
-/** Follows the phone unless the player picks a theme in Settings. */
-export function ThemeProvider({
-  choice,
-  children,
-}: {
-  choice: 'system' | ThemeName;
-  children: ReactNode;
-}) {
-  const scheme = useColorScheme();
-  const name: ThemeName = choice === 'system' ? (scheme === 'light' ? 'light' : 'dark') : choice;
-  const value = useMemo(() => ({ name, c: palettes[name] }), [name]);
+/** Keeps the chosen appearance (saved on the device) and the phone's own. */
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const system = useColorScheme();
+  const [setting, setSettingState] = useState<ThemeSetting>('system');
+
+  useEffect(() => {
+    AsyncStorage.getItem(KEY)
+      .then((s) => {
+        if (s === 'light' || s === 'dark' || s === 'system') setSettingState(s);
+      })
+      .catch(() => {});
+  }, []);
+
+  const setSetting = useCallback((s: ThemeSetting) => {
+    setSettingState(s);
+    AsyncStorage.setItem(KEY, s).catch(() => {});
+  }, []);
+
+  const scheme = resolveScheme(setting, system);
+  const value = useMemo(
+    () => ({ scheme, colors: PALETTES[scheme], setting, setSetting }),
+    [scheme, setting, setSetting],
+  );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
-export const useTheme = () => useContext(ThemeContext);
+export function useTheme(): ThemeState {
+  return useContext(ThemeContext);
+}
 
-/** Palette-aware StyleSheet: `const useStyles = themed((c) => ({ ... }))`. */
-type Styles = Record<string, ViewStyle | TextStyle | ImageStyle>;
+export function useColors(): Palette {
+  return useContext(ThemeContext).colors;
+}
 
-export function themed<S extends Styles>(make: (c: Palette) => S & Styles) {
-  const cache = new Map<Palette, Readonly<S>>();
+/**
+ * Styles that depend on the palette: `const useThemed = themed((colors) => ({ colors, styles }))`
+ * at the bottom of a file, then `const { colors, styles } = useThemed()` in each component.
+ * Built once per palette.
+ */
+export function themed<T>(factory: (colors: Palette) => T): () => T {
+  const cache = new Map<Palette, T>();
   return () => {
-    const { c } = useTheme();
-    let styles = cache.get(c);
-    if (!styles) {
-      styles = StyleSheet.create(make(c));
-      cache.set(c, styles);
+    const colors = useColors();
+    let value = cache.get(colors);
+    if (value === undefined) {
+      value = factory(colors);
+      cache.set(colors, value);
     }
-    return styles;
+    return value;
   };
 }

@@ -1,7 +1,7 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { useCallback } from 'react';
 
-import { useSettings, type SoundLevel } from '@/settings';
+import { useSettings, type Volume } from '@/settings';
 
 const SOURCES = {
   correct: require('../assets/sounds/correct.wav'),
@@ -13,7 +13,7 @@ const SOURCES = {
 
 export type Cue = keyof typeof SOURCES;
 
-const VOLUME: Record<SoundLevel, number> = { off: 0, low: 0.3, medium: 0.6, high: 1 };
+const VOLUME: Record<Volume, number> = { off: 0, low: 0.3, medium: 0.6, high: 1 };
 
 const players: Partial<Record<Cue, AudioPlayer>> = {};
 let modeSet = false;
