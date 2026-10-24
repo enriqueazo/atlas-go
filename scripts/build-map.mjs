@@ -7,8 +7,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { geoNaturalEarth1, geoPath } from 'd3-geo';
-import { geoProject } from 'd3-geo-projection';
+import { geoPath } from 'd3-geo';
+import { geoPatterson, geoProject } from 'd3-geo-projection';
 import { topology } from 'topojson-server';
 import { presimplify, simplify, quantile, planarTriangleArea } from 'topojson-simplify';
 import { feature, neighbors } from 'topojson-client';
@@ -68,13 +68,19 @@ for (const f of features) {
   };
 }
 
-// Project first, so simplification works on the flat map we draw.
-const projection = geoNaturalEarth1().fitWidth(WIDTH, { type: 'FeatureCollection', features });
+// Project first, so simplification works on the flat map we draw. Patterson
+// is cylindrical: the left and right edges are both the 180th meridian and
+// the top and bottom are straight, so the map tiles seamlessly when the game
+// wraps it like a torus. WIDTH is exactly 360 degrees of longitude.
+const PAD = 12;
+const projection = geoPatterson()
+  .scale(WIDTH / (2 * Math.PI))
+  .translate([WIDTH / 2, 0])
+  .precision(0.1);
 {
   const [[, top], [, bottom]] = geoPath(projection).bounds({ type: 'FeatureCollection', features });
-  const [tx, ty] = projection.translate();
-  projection.translate([tx, ty - top + 4]);
-  var HEIGHT = Math.ceil(bottom - top + 8);
+  projection.translate([WIDTH / 2, -top + PAD]);
+  var HEIGHT = Math.ceil(bottom - top + 2 * PAD);
 }
 const flat = geoProject({ type: 'FeatureCollection', features }, projection);
 
