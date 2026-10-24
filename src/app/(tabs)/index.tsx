@@ -8,7 +8,7 @@ import { OptionCard, type OptionStatus } from '@/components/OptionCard';
 import { tabBarStyle } from '@/components/tabBar';
 import { Button, Chip, Screen } from '@/components/ui';
 import { WorldMap } from '@/components/WorldMap';
-import { WORLD_BOARD } from '@/game/complete';
+import { formatTime, WORLD_BOARD } from '@/game/complete';
 import { levelFor, MAX_LEVEL, nextQuestion, optionLabel, PER_LEVEL, pointsFor, type Question } from '@/game/engine';
 import { useBoardProgress } from '@/game/progress';
 import { useCompleteGame } from '@/game/useCompleteGame';
@@ -84,6 +84,7 @@ export default function Game() {
   };
 
   const quit = () => {
+    if (painting) complete.stop();
     setMode(null);
     setQuestion(null);
     setPicked(null);
@@ -144,7 +145,15 @@ export default function Game() {
       icon: 'map-check-outline',
       title: t.modeComplete,
       description: t.modeCompleteDesc,
-      chip: progress.filled.size > 0 ? t.filledOf(progress.filled.size, progress.total) : null,
+      chip:
+        [
+          progress.filled.size > 0 && progress.filled.size < progress.total
+            ? t.filledOf(progress.filled.size, progress.total)
+            : null,
+          progress.best !== null ? t.bestTime(formatTime(progress.best)) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || null,
     },
   ];
 
@@ -158,9 +167,9 @@ export default function Game() {
             </Pressable>
             <View style={styles.streak} accessibilityLabel={t.filledLabel(progress.filled.size, progress.total)}>
               <MaterialCommunityIcons name="map-check-outline" size={20} color={colors.purpleSoft} />
-              <Text style={styles.streakText}>{t.modeComplete}</Text>
+              <Text style={styles.streakText}>{t.filledOf(progress.filled.size, progress.total)}</Text>
             </View>
-            <Text style={styles.score}>{t.filledOf(progress.filled.size, progress.total)}</Text>
+            <Clock time={complete.elapsed} running={complete.running} />
           </View>
         ) : playing ? (
           <View style={styles.header}>
@@ -202,7 +211,13 @@ export default function Game() {
         </View>
 
         {painting ? (
-          <CompletePanel game={complete} filled={progress.filled.size} total={progress.total} misses={progress.misses} />
+          <CompletePanel
+            game={complete}
+            filled={progress.filled.size}
+            total={progress.total}
+            misses={progress.misses}
+            best={progress.best}
+          />
         ) : playing && question ? (
           <View style={styles.panel}>
             <Text style={styles.prompt}>{question.mode === 'countries' ? t.askCountry : t.askCapital}</Text>
@@ -268,17 +283,37 @@ export default function Game() {
   );
 }
 
+/** The clock for Complete the map, ticking while it runs. */
+function Clock({ time, running }: { time: () => number; running: boolean }) {
+  const { styles } = useThemed();
+  const { t } = useSettings();
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setTick((n) => n + 1), 250);
+    return () => clearInterval(id);
+  }, [running]);
+  const shown = formatTime(time());
+  return (
+    <Text style={styles.score} accessibilityLabel={t.timeLabel(shown)}>
+      {shown}
+    </Text>
+  );
+}
+
 /** The place to find, what the last tap was, and how much of the map is painted. */
 function CompletePanel({
   game,
   filled,
   total,
   misses,
+  best,
 }: {
   game: ReturnType<typeof useCompleteGame>;
   filled: number;
   total: number;
   misses: number;
+  best: number | null;
 }) {
   const { colors, styles } = useThemed();
   const { t, language } = useSettings();
@@ -288,8 +323,9 @@ function CompletePanel({
       <View style={styles.panel}>
         <View style={styles.footer}>
           <View>
-            <Text style={[styles.verdict, { color: colors.green }]}>{t.mapDone}</Text>
-            <Text style={styles.answer}>{t.mapDoneStats(total, misses)}</Text>
+            <Text style={[styles.verdict, { color: colors.green }]}>{game.record ? t.newRecord : t.mapDone}</Text>
+            <Text style={styles.answer}>{t.mapDoneStats(formatTime(game.elapsed()), misses)}</Text>
+            {best !== null && best < game.elapsed() && <Text style={styles.answer}>{t.bestTime(formatTime(best))}</Text>}
           </View>
           <Button label={t.startOver} onPress={game.restart} />
         </View>

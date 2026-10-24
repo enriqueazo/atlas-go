@@ -26,6 +26,16 @@ export const WORLD_BOARD: Board = {
 
 /** Wrong taps on one place before the map shows where it is. */
 export const MISSES_TO_REVEAL = 3;
+/** Each wrong tap adds this much to the clock, in milliseconds. */
+export const MISS_PENALTY = 5000;
+
+/** A time as m:ss, or h:mm:ss past the hour. */
+export function formatTime(ms: number) {
+  const s = Math.floor(ms / 1000);
+  const [h, m, sec] = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60];
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
 /**
  * How close to a small place a tap must land, in screen pixels: generous for
  * the place being asked, tight for the rest so their rings don't swallow
