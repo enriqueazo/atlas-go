@@ -6,6 +6,7 @@ import type { Cue } from '@/sounds';
 
 import { MISSES_TO_REVEAL, MISS_PENALTY, nextTarget, tapAt, type Board } from './complete';
 import type { useBoardProgress } from './progress';
+import { trackAnswer, trackMap } from './stats';
 import type { Country } from './world';
 
 /** What the last tap said, shown under the place to find. */
@@ -26,6 +27,8 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
   // When the clock last started, or null while it is stopped.
   const since = useRef<number | null>(null);
   const [record, setRecord] = useState(false);
+  // Only the world map feeds the Ranking and Progress tabs for now.
+  const world = board.id === 'world';
 
   /** Saves the time since the clock last started; keeps it running if asked. */
   const bank = (running: boolean) => {
@@ -76,11 +79,14 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
       const time = progress.ms + (since.current === null ? 0 : now - since.current) + progress.misses * MISS_PENALTY;
       bank(!last);
       progress.fill(target.iso);
+      // Found on the first tap counts as known, for the Progress tab.
+      if (world) trackAnswer({ mode: 'countries', iso: target.iso, correct: misses === 0 });
       setFlash({ iso: target.iso, kind: 'right', at: now });
       setNote({ kind: 'right', iso: target.iso });
       if (last) {
         const beat = progress.best === null || time < progress.best;
         progress.finish(time);
+        if (world) trackMap({ ms: time, misses: progress.misses, at: now });
         setRecord(beat && progress.best !== null);
         play(beat ? 'record' : 'correct');
       } else {
@@ -101,6 +107,7 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
   const skip = () => {
     if (!target) return;
     play('tap');
+    if (world && misses > 0) trackAnswer({ mode: 'countries', iso: target.iso, correct: false });
     skipped.current = [...skipped.current, target.iso];
     setNote(null);
     pick(progress.filled);
