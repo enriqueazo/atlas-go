@@ -1,9 +1,9 @@
-import { COUNTRIES, LAND, MAP_HEIGHT, MAP_WIDTH, type Country, type LandShape } from './world';
+import { COUNTRIES, LAND, MAP_HEIGHT, MAP_WIDTH, type LandShape, type Place } from './world';
 
 /**
- * A map to fill in: the places to find and the shapes to tap. The world is the
- * first one; a country's provinces or states can plug in later as their own
- * board, with their own id so their progress is saved apart.
+ * A map to fill in: the places to find and the shapes to tap. The world is
+ * one; each country's provinces or states is another (see countries.ts), with
+ * its own id so its progress and record are saved apart.
  */
 export type Board = {
   id: string;
@@ -11,8 +11,16 @@ export type Board = {
   height: number;
   /** Whether the map wraps around at its edges (the world does). */
   wraps: boolean;
-  regions: Country[];
+  regions: Place[];
+  /** Land to draw; shapes with no iso are outside the game. */
   shapes: LandShape[];
+  /**
+   * The country whose regions these are. Its neighbours stay blank to the
+   * end, and a tap on them is outside the map rather than sea.
+   */
+  country?: string;
+  /** Outlines around regions moved closer to fit (Alaska, the Canaries). */
+  frames?: string[];
 };
 
 export const WORLD_BOARD: Board = {
@@ -52,7 +60,7 @@ const LATER = 8;
  * The next place to find: the easiest tier left, so the map fills in from the
  * well-known countries to the microstates. Skipped places come back later.
  */
-export function nextTarget(board: Board, filled: ReadonlySet<string>, skipped: string[]): Country | null {
+export function nextTarget(board: Board, filled: ReadonlySet<string>, skipped: string[]): Place | null {
   const left = board.regions.filter((r) => !filled.has(r.iso));
   if (!left.length) return null;
   const later = new Set(skipped.slice(-LATER));
@@ -70,30 +78,39 @@ type Ring = number[];
 type Hit = { iso: string; rings: Ring[]; box: [number, number, number, number] };
 
 const parsed = new WeakMap<Board, Hit[]>();
+const parsedOutside = new WeakMap<Board, Hit[]>();
 
 function hitsFor(board: Board): Hit[] {
   let hits = parsed.get(board);
   if (hits) return hits;
-  hits = board.shapes
-    .filter((s): s is LandShape & { iso: string } => !!s.iso)
-    .map((s) => {
-      const rings: Ring[] = [];
-      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      for (const part of s.d.split('M')) {
-        if (!part) continue;
-        const nums = part.replace(/Z/g, '').split(/[L,]/).map(Number);
-        for (let i = 0; i < nums.length; i += 2) {
-          x0 = Math.min(x0, nums[i]);
-          x1 = Math.max(x1, nums[i]);
-          y0 = Math.min(y0, nums[i + 1]);
-          y1 = Math.max(y1, nums[i + 1]);
-        }
-        rings.push(nums);
-      }
-      return { iso: s.iso, rings, box: [x0, y0, x1, y1] };
-    });
+  hits = board.shapes.filter((s): s is LandShape & { iso: string } => !!s.iso).map(parse);
   parsed.set(board, hits);
   return hits;
+}
+
+function outsideFor(board: Board): Hit[] {
+  let hits = parsedOutside.get(board);
+  if (hits) return hits;
+  hits = board.shapes.filter((s) => !s.iso).map((s) => parse({ ...s, iso: '' }));
+  parsedOutside.set(board, hits);
+  return hits;
+}
+
+function parse(s: LandShape & { iso: string }): Hit {
+  const rings: Ring[] = [];
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const part of s.d.split('M')) {
+    if (!part) continue;
+    const nums = part.replace(/Z/g, '').split(/[L,]/).map(Number);
+    for (let i = 0; i < nums.length; i += 2) {
+      x0 = Math.min(x0, nums[i]);
+      x1 = Math.max(x1, nums[i]);
+      y0 = Math.min(y0, nums[i + 1]);
+      y1 = Math.max(y1, nums[i + 1]);
+    }
+    rings.push(nums);
+  }
+  return { iso: s.iso, rings, box: [x0, y0, x1, y1] };
 }
 
 function inside(h: Hit, x: number, y: number) {
@@ -121,7 +138,7 @@ function distance(board: Board, ax: number, ay: number, bx: number, by: number) 
 }
 
 /** Whether a place is drawn so small that taps around it count too. */
-const isSmall = (r: Country, px: number) => r.tiny || Math.max(r.box[2], r.box[3]) / px < SMALL;
+const isSmall = (r: Place, px: number) => r.tiny || Math.max(r.box[2], r.box[3]) / px < SMALL;
 
 /**
  * What a tap at map point (x, y) means for `target`. `px` is map units per
@@ -130,24 +147,24 @@ const isSmall = (r: Country, px: number) => r.tiny || Math.max(r.box[2], r.box[3
  */
 export function tapAt(
   board: Board,
-  target: Country,
+  target: Place,
   x: number,
   y: number,
   px: number,
-): { kind: 'right' } | { kind: 'wrong'; iso: string } | { kind: 'sea' } {
+): { kind: 'right' } | { kind: 'wrong'; iso: string } | { kind: 'sea' } | { kind: 'outside' } {
   if (board.wraps) {
     x = ((x % board.width) + board.width) % board.width;
     y = ((y % board.height) + board.height) % board.height;
   }
   const hits = hitsFor(board);
-  const near = (r: Country, reach: number) =>
+  const near = (r: Place, reach: number) =>
     isSmall(r, px) && distance(board, x, y, r.center[0], r.center[1]) <= reach * px;
 
   const own = hits.find((h) => h.iso === target.iso);
   if ((own && inside(own, x, y)) || near(target, TARGET_HIT)) return { kind: 'right' };
 
   // Tiny places first: their ring sits on top of whatever is under them.
-  let ring: Country | null = null;
+  let ring: Place | null = null;
   let best = Infinity;
   for (const r of board.regions) {
     if (!r.tiny || !near(r, RING_HIT)) continue;
@@ -157,5 +174,8 @@ export function tapAt(
   if (ring) return { kind: 'wrong', iso: ring.iso };
 
   const hit = hits.find((h) => inside(h, x, y));
-  return hit ? { kind: 'wrong', iso: hit.iso } : { kind: 'sea' };
+  if (hit) return { kind: 'wrong', iso: hit.iso };
+  // On a country's map, the land around it is outside the game.
+  if (board.country && outsideFor(board).some((h) => inside(h, x, y))) return { kind: 'outside' };
+  return { kind: 'sea' };
 }

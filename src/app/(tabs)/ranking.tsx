@@ -6,11 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/ui';
 import { formatTime } from '@/game/complete';
+import { COUNTRY_MAPS } from '@/game/countries';
 import { getStats, KEEP_RUNS, weekStart, type Stats } from '@/game/stats';
 import { useSettings, type Mode } from '@/settings';
 import { fonts, radius, space, themed } from '@/theme';
 
-type Board = Mode | 'complete';
+type Board = Mode | 'complete' | 'country';
 type Period = 'week' | 'all';
 type RowData = { key: string; title: string; value: string; at: number };
 
@@ -23,6 +24,8 @@ export default function RankingTab() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [board, setBoard] = useState<Board>('countries');
   const [period, setPeriod] = useState<Period>('all');
+  // Complete a country: which country's table, by board id.
+  const [countryId, setCountryId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -33,12 +36,19 @@ export default function RankingTab() {
   const date = (at: number) =>
     new Date(at).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' });
   const since = period === 'week' ? weekStart(new Date()) : 0;
+  // Countries with a finished map, in the order of the country list.
+  const played = stats ? COUNTRY_MAPS.filter((m) => stats.countryMaps[m.id]?.length) : [];
+  const shownCountry = played.find((m) => m.id === countryId) ?? played[0] ?? null;
+  const mapRows = (maps: { ms: number; misses: number; at: number }[]) =>
+    maps
+      .filter((m) => m.at >= since)
+      .map((m) => ({ key: `${m.at}`, title: t.mapTitle(m.misses), value: formatTime(m.ms), at: m.at }));
   const rows: RowData[] = !stats
     ? []
     : board === 'complete'
-      ? stats.maps
-          .filter((m) => m.at >= since)
-          .map((m) => ({ key: `${m.at}`, title: t.mapTitle(m.misses), value: formatTime(m.ms), at: m.at }))
+      ? mapRows(stats.maps)
+      : board === 'country'
+        ? mapRows(shownCountry ? stats.countryMaps[shownCountry.id] : [])
       : stats.runs[board]
           .filter((r) => r.at >= since)
           .map((r) => ({ key: `${r.id}`, title: t.runTitle(r.streak), value: `${r.points}`, at: r.at }));
@@ -47,6 +57,7 @@ export default function RankingTab() {
     { id: 'countries', label: t.modeCountries },
     { id: 'capitals', label: t.modeCapitals },
     { id: 'complete', label: t.modeComplete },
+    { id: 'country', label: t.modeCountry },
   ];
 
   return (
@@ -72,6 +83,18 @@ export default function RankingTab() {
                 <Toggle key={b.id} label={b.label} on={board === b.id} onPress={() => setBoard(b.id)} />
               ))}
             </View>
+            {board === 'country' && played.length > 0 && (
+              <View style={styles.chips}>
+                {played.map((m) => (
+                  <Toggle
+                    key={m.id}
+                    label={m[language]}
+                    on={shownCountry?.id === m.id}
+                    onPress={() => setCountryId(m.id)}
+                  />
+                ))}
+              </View>
+            )}
             <View style={styles.segment}>
               {(['week', 'all'] as const).map((p) => (
                 <Pressable
@@ -90,7 +113,13 @@ export default function RankingTab() {
 
             {!stats ? null : rows.length === 0 ? (
               <Card>
-                <Text style={styles.muted}>{period === 'week' ? t.rankingEmptyWeek : t.rankingEmpty}</Text>
+                <Text style={styles.muted}>
+                  {board === 'country' && !shownCountry
+                    ? t.rankingEmptyCountry
+                    : period === 'week'
+                      ? t.rankingEmptyWeek
+                      : t.rankingEmpty}
+                </Text>
               </Card>
             ) : (
               <Card>
@@ -109,7 +138,9 @@ export default function RankingTab() {
                 <Text style={styles.note}>
                   {board === 'complete'
                     ? t.mapsNote(stats.mapsDone, KEEP_RUNS)
-                    : t.rankingNote(stats.runs[board].length, KEEP_RUNS)}
+                    : board === 'country'
+                      ? t.mapsNote(shownCountry ? (stats.countryMapsDone[shownCountry.id] ?? 0) : 0, KEEP_RUNS)
+                      : t.rankingNote(stats.runs[board].length, KEEP_RUNS)}
                 </Text>
               </Card>
             )}

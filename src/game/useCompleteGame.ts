@@ -6,11 +6,15 @@ import type { Cue } from '@/sounds';
 
 import { MISSES_TO_REVEAL, MISS_PENALTY, nextTarget, tapAt, type Board } from './complete';
 import type { useBoardProgress } from './progress';
-import { trackAnswer, trackMap } from './stats';
-import type { Country } from './world';
+import { trackAnswer, trackCountryMap, trackMap, trackRegion } from './stats';
+import type { Place } from './world';
 
 /** What the last tap said, shown under the place to find. */
-export type Note = { kind: 'right'; iso: string } | { kind: 'wrong'; iso: string } | { kind: 'sea' };
+export type Note =
+  | { kind: 'right'; iso: string }
+  | { kind: 'wrong'; iso: string }
+  | { kind: 'sea' }
+  | { kind: 'outside' };
 
 /**
  * Complete the map: name a place, the player taps it to paint it. Wrong taps
@@ -19,7 +23,7 @@ export type Note = { kind: 'right'; iso: string } | { kind: 'wrong'; iso: string
  * is the whole map in the least time.
  */
 export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoardProgress>, play: (cue: Cue) => void) {
-  const [target, setTarget] = useState<Country | null>(null);
+  const [target, setTarget] = useState<Place | null>(null);
   const [misses, setMisses] = useState(0);
   const [flash, setFlash] = useState<Flash | null>(null);
   const [note, setNote] = useState<Note | null>(null);
@@ -27,8 +31,11 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
   // When the clock last started, or null while it is stopped.
   const since = useRef<number | null>(null);
   const [record, setRecord] = useState(false);
-  // Only the world map feeds the Ranking and Progress tabs for now.
+  // The world map's countries count toward the Progress tab's known
+  // countries and continents; a country's regions toward the day and totals.
   const world = board.id === 'world';
+  const track = (correct: boolean) =>
+    world ? trackAnswer({ mode: 'countries', iso: target!.iso, correct }) : trackRegion(correct);
 
   /** Saves the time since the clock last started; keeps it running if asked. */
   const bank = (running: boolean) => {
@@ -80,13 +87,15 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
       bank(!last);
       progress.fill(target.iso);
       // Found on the first tap counts as known, for the Progress tab.
-      if (world) trackAnswer({ mode: 'countries', iso: target.iso, correct: misses === 0 });
+      track(misses === 0);
       setFlash({ iso: target.iso, kind: 'right', at: now });
       setNote({ kind: 'right', iso: target.iso });
       if (last) {
         const beat = progress.best === null || time < progress.best;
         progress.finish(time);
-        if (world) trackMap({ ms: time, misses: progress.misses, at: now });
+        const map = { ms: time, misses: progress.misses, at: now };
+        if (world) trackMap(map);
+        else trackCountryMap(board.id, map);
         setRecord(beat && progress.best !== null);
         play(beat ? 'record' : 'correct');
       } else {
@@ -107,7 +116,7 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
   const skip = () => {
     if (!target) return;
     play('tap');
-    if (world && misses > 0) trackAnswer({ mode: 'countries', iso: target.iso, correct: false });
+    if (misses > 0) track(false);
     skipped.current = [...skipped.current, target.iso];
     setNote(null);
     pick(progress.filled);

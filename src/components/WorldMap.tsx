@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 
-import { COUNTRIES, LAND, MAP_HEIGHT, MAP_WIDTH, type Country } from '@/game/world';
+import { WORLD_BOARD, type Board } from '@/game/complete';
+import type { Country, LandShape, Place } from '@/game/world';
 import { useSettings, type Mode } from '@/settings';
 import { radius, useColors, type Palette } from '@/theme';
 
@@ -22,8 +23,10 @@ export type MapStatus = 'ask' | 'right' | 'wrong';
 export type Flash = { iso: string; kind: 'right' | 'wrong'; at: number };
 
 type Props = {
-  /** Country to zoom to; null shows the whole world. */
-  focus: Country | null;
+  /** The map to draw; the world unless a country's map is being completed. */
+  board?: Board;
+  /** Place to zoom to; null shows the whole map. */
+  focus: Place | null;
   mode: Mode;
   status: MapStatus;
   /**
@@ -49,54 +52,63 @@ const TAP_SLOP = 8;
 const MIN_W = 40;
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-/**
- * The widest frame that still shows each place once: no wider and no taller
- * than one world, so zooming out never shows the map repeating.
- */
-const maxWidth = (aspect: number) => Math.min(MAP_WIDTH, MAP_HEIGHT * aspect);
+/** Room around a country's map when zoomed all the way out. */
+const MARGIN = 1.08;
 
-function frameFor(focus: Country | null, aspect: number): Frame {
+/**
+ * The widest frame: on the world, no wider and no taller than one world, so
+ * zooming out never shows the map repeating; on a country, the whole country.
+ */
+const maxWidth = (b: Board, aspect: number) =>
+  b.wraps ? Math.min(b.width, b.height * aspect) : Math.max(b.width, b.height * aspect) * MARGIN;
+
+function frameFor(b: Board, focus: Place | null, aspect: number): Frame {
   if (!focus) {
-    const w = maxWidth(aspect);
-    return { x: MAP_WIDTH / 2 - w / 2, y: MAP_HEIGHT / 2 - w / aspect / 2, w, h: w / aspect };
+    const w = maxWidth(b, aspect);
+    return { x: b.width / 2 - w / 2, y: b.height / 2 - w / aspect / 2, w, h: w / aspect };
   }
   const [bx, by, bw, bh] = focus.box;
   // Leave room around the country so its neighbours give context.
   const context = focus.tiny ? 130 : 110;
   const pad = Math.max(bw, bh) > 150 ? 1.35 : 2.2;
-  const w = Math.min(Math.max(bw * pad, bh * pad * aspect, context), maxWidth(aspect));
+  const w = Math.min(Math.max(bw * pad, bh * pad * aspect, context), maxWidth(b, aspect));
   const h = w / aspect;
   const [cx, cy] = focus.tiny ? focus.center : [bx + bw / 2, by + bh / 2];
   return { x: cx - w / 2, y: cy - h / 2, w, h };
 }
 
-// The map wraps like a torus: past the right edge is the left edge, past the
-// top is the bottom. Frames are kept with their centre on the base copy, and
-// the world is drawn once per copy the frame overlaps.
+// The world wraps like a torus: past the right edge is the left edge, past
+// the top is the bottom. Frames are kept with their centre on the base copy,
+// and the world is drawn once per copy the frame overlaps. A country's map
+// doesn't wrap: its centre stays on the map, so it can't be lost off screen.
 const mod = (n: number, m: number) => ((n % m) + m) % m;
+const clamp = (n: number, max: number) => Math.min(max, Math.max(0, n));
 
-function wrap(f: Frame): Frame {
+function wrap(b: Board, f: Frame): Frame {
   const x = f.x + f.w / 2;
   const y = f.y + f.h / 2;
-  return { ...f, x: f.x + mod(x, MAP_WIDTH) - x, y: f.y + mod(y, MAP_HEIGHT) - y };
+  if (!b.wraps) return { ...f, x: f.x + clamp(x, b.width) - x, y: f.y + clamp(y, b.height) - y };
+  return { ...f, x: f.x + mod(x, b.width) - x, y: f.y + mod(y, b.height) - y };
 }
 
 /** Shift `to` by whole worlds so it is the copy closest to `from`. */
-function nearest(to: Frame, from: Frame): Frame {
+function nearest(b: Board, to: Frame, from: Frame): Frame {
+  if (!b.wraps) return to;
   const dx = from.x + from.w / 2 - (to.x + to.w / 2);
   const dy = from.y + from.h / 2 - (to.y + to.h / 2);
   return {
     ...to,
-    x: to.x + Math.round(dx / MAP_WIDTH) * MAP_WIDTH,
-    y: to.y + Math.round(dy / MAP_HEIGHT) * MAP_HEIGHT,
+    x: to.x + Math.round(dx / b.width) * b.width,
+    y: to.y + Math.round(dy / b.height) * b.height,
   };
 }
 
-function tilesFor(f: Frame): [number, number][] {
+function tilesFor(b: Board, f: Frame): [number, number][] {
+  if (!b.wraps) return [[0, 0]];
   const tiles: [number, number][] = [];
-  for (let j = Math.floor(f.y / MAP_HEIGHT); j * MAP_HEIGHT < f.y + f.h; j++) {
-    for (let i = Math.floor(f.x / MAP_WIDTH); i * MAP_WIDTH < f.x + f.w; i++) {
-      tiles.push([i * MAP_WIDTH, j * MAP_HEIGHT]);
+  for (let j = Math.floor(f.y / b.height); j * b.height < f.y + f.h; j++) {
+    for (let i = Math.floor(f.x / b.width); i * b.width < f.x + f.w; i++) {
+      tiles.push([i * b.width, j * b.height]);
     }
   }
   return tiles;
@@ -106,10 +118,18 @@ type Touch = { x: number; y: number };
 const touchesOf = (e: GestureResponderEvent): Touch[] =>
   Array.from(e.nativeEvent.touches ?? [], (t) => ({ x: t.pageX, y: t.pageY }));
 
-const COLOR_OF = new Map(LAND.map((l) => [l.iso, l.c]));
-const TINY = COUNTRIES.filter((c) => c.tiny);
+// Each map's colours and tiny places, worked out once.
+const extras = new WeakMap<Board, { colorOf: Map<string | null, number>; tiny: Place[] }>();
+function extrasFor(b: Board) {
+  let e = extras.get(b);
+  if (!e) {
+    e = { colorOf: new Map(b.shapes.map((l) => [l.iso, l.c])), tiny: b.regions.filter((r) => r.tiny) };
+    extras.set(b, e);
+  }
+  return e;
+}
 
-export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props) {
+export function WorldMap({ board = WORLD_BOARD, focus, mode, status, paint, onTap, onGesture }: Props) {
   const c = useColors();
   const { t } = useSettings();
   // Whether the player has dragged or zoomed away from where the game put
@@ -128,6 +148,8 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
   onTapRef.current = onTap;
   const onGestureRef = useRef(onGesture);
   onGestureRef.current = onGesture;
+  const boardRef = useRef(board);
+  boardRef.current = board;
 
   const measure = () =>
     view.current?.measure((_x, _y, _w, _h, pageX, pageY) => {
@@ -141,7 +163,7 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
   };
 
   const show = (f: Frame) => {
-    const wrapped = wrap(f);
+    const wrapped = wrap(boardRef.current, f);
     current.current = wrapped;
     setFrame(wrapped);
   };
@@ -150,7 +172,7 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
   // point (sx, sy) of `start` under the screen point (ex, ey).
   const zoomed = (start: Frame, w: number, sx: number, sy: number, ex: number, ey: number): Frame => {
     const s = sizeRef.current!;
-    w = Math.min(maxWidth(s.w / s.h), Math.max(MIN_W, w));
+    w = Math.min(maxWidth(boardRef.current, s.w / s.h), Math.max(MIN_W, w));
     const h = w / (s.w / s.h);
     const k0 = start.w / s.w;
     const k1 = w / s.w;
@@ -260,7 +282,7 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
     if (!from || !s) return show(target);
     // Head for the nearest copy of the target, so the camera takes the short
     // way round (Alaska to Russia crosses the Pacific).
-    const to = nearest(target, from);
+    const to = nearest(board, target, from);
     const fc = [from.x + from.w / 2, from.y + from.h / 2];
     const tc = [to.x + to.w / 2, to.y + to.h / 2];
     const dist = Math.hypot(tc[0] - fc[0], tc[1] - fc[1]);
@@ -272,7 +294,7 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
       const e = ease(t);
       const w = Math.min(
         from.w * Math.pow(to.w / from.w, e) * (1 + lift * Math.sin(Math.PI * e)),
-        maxWidth(aspect),
+        maxWidth(board, aspect),
       );
       const h = w / aspect;
       const cx = fc[0] + (tc[0] - fc[0]) * e;
@@ -288,17 +310,26 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
   const recenter = () => {
     if (!size) return;
     setMoved(false);
-    fly(frameFor(focus, size.w / size.h));
+    fly(frameFor(board, focus, size.w / size.h));
   };
 
   const painting = !!paint;
+  // A new map starts from its own whole view, not from where the last one was.
+  const shownBoard = useRef(board);
   useEffect(() => {
     const f = current.current;
+    if (shownBoard.current !== board && size) {
+      shownBoard.current = board;
+      cancelAnimationFrame(flight.current);
+      setMoved(false);
+      show(frameFor(board, null, size.w / size.h));
+      return;
+    }
     if (!focus && painting && f && size) {
       // Painting the map, the camera stays put between countries: only fit
       // the frame to the new shape of the card.
       const aspect = size.w / size.h;
-      const w = Math.min(f.w, maxWidth(aspect));
+      const w = Math.min(f.w, maxWidth(board, aspect));
       const h = w / aspect;
       cancelAnimationFrame(flight.current);
       show({ x: f.x + f.w / 2 - w / 2, y: f.y + f.h / 2 - h / 2, w, h });
@@ -306,9 +337,9 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
     }
     recenter();
     return () => cancelAnimationFrame(flight.current);
-  }, [focus, size, painting]);
+  }, [focus, size, painting, board]);
 
-  const shape = useMemo(() => (focus ? LAND.find((l) => l.iso === focus.iso) : undefined), [focus]);
+  const shape = useMemo(() => (focus ? board.shapes.find((l) => l.iso === focus.iso) : undefined), [focus, board]);
 
   // A slow heartbeat for the glow and rings while the question is open, and
   // the spotlight fading in as the camera lands.
@@ -349,7 +380,11 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
     return () => cancelAnimationFrame(raf);
   }, [flash]);
   const flashLeft = flash ? Math.max(0, 1 - (Date.now() - flash.at) / FLASH) : 0;
-  const flashShape = useMemo(() => (flash ? LAND.find((l) => l.iso === flash.iso) : undefined), [flash]);
+  const flashShape = useMemo(
+    () => (flash ? board.shapes.find((l) => l.iso === flash.iso) : undefined),
+    [flash, board],
+  );
+  const { colorOf, tiny } = extrasFor(board);
 
   // Map units per screen pixel, so strokes and markers keep their size.
   const px = frame && size ? frame.w / size.w : 1;
@@ -359,9 +394,9 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
   // Countries a few pixels wide on screen also get a ring, so they can't hide.
   const small = !!focus && (focus.tiny || Math.max(focus.box[2], focus.box[3]) / px < 26);
   const ring = focus && mode === 'countries' && small;
-  const capital = focus?.capital && mode === 'capitals' ? focus.capital : null;
+  const capital = mode === 'capitals' && focus && 'capital' in focus ? (focus as Country).capital : null;
 
-  const tiles = frame ? tilesFor(frame) : [];
+  const tiles = frame ? tilesFor(board, frame) : [];
 
   return (
     <View style={[styles.card, { backgroundColor: c.ocean, borderColor: c.border }]}>
@@ -384,7 +419,7 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
               <G key={`${x} ${y}`} transform={`translate(${x} ${y})`}>
                 <Waves color={c.oceanDeep} px={px} />
                 <G transform={`translate(0 ${2.5 * px})`}>
-                  <LandShadow c={c} />
+                  <LandShadow c={c} shapes={board.shapes} />
                 </G>
               </G>
             ))}
@@ -396,8 +431,19 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
                 strokeWidth={1.1 * px}
                 strokeLinejoin="round"
               >
-                <Land c={c} />
-                {paint && <Blank c={c} filled={paint.filled} />}
+                <Land c={c} shapes={board.shapes} />
+                {paint && <Blank c={c} board={board} filled={paint.filled} />}
+                {board.frames?.map((d, i) => (
+                  <Path
+                    key={i}
+                    d={d}
+                    fill="none"
+                    stroke={c.landStroke}
+                    strokeOpacity={0.6}
+                    strokeWidth={1.5 * px}
+                    strokeDasharray={`${6 * px} ${4 * px}`}
+                  />
+                ))}
               </G>
             ))}
             {/* Spotlight: wash out the rest of the world around the asked country. */}
@@ -415,7 +461,7 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
               <G key={`${x} ${y}`} transform={`translate(${x} ${y})`}>
                 {/* Tiny countries get a ring to tap, filled in once painted. */}
                 {paint &&
-                  TINY.map((t) => {
+                  tiny.map((t) => {
                     const done = paint.filled.has(t.iso);
                     return (
                       <Circle
@@ -423,7 +469,7 @@ export function WorldMap({ focus, mode, status, paint, onTap, onGesture }: Props
                         cx={t.center[0]}
                         cy={t.center[1]}
                         r={(done ? 5 : 7) * px}
-                        fill={done ? c.land[COLOR_OF.get(t.iso) ?? 0] : c.blank}
+                        fill={done ? c.land[colorOf.get(t.iso) ?? 0] : c.blank}
                         fillOpacity={done ? 1 : 0.5}
                         stroke={done ? c.landStroke : c.blankRing}
                         strokeWidth={1.5 * px}
@@ -561,34 +607,39 @@ const Waves = memo(function Waves({ color, px }: { color: string; px: number }) 
 
 // The land layers only change with the theme, so they skip the per-frame
 // re-render while the camera moves.
-const LandShadow = memo(function LandShadow({ c }: { c: Palette }) {
+const LandShadow = memo(function LandShadow({ c, shapes }: { c: Palette; shapes: LandShape[] }) {
   return (
     <G fill={c.landShadow}>
-      {LAND.map((l, i) => (
+      {shapes.map((l, i) => (
         <Path key={i} d={l.d} />
       ))}
     </G>
   );
 });
 
-const Land = memo(function Land({ c }: { c: Palette }) {
+const Land = memo(function Land({ c, shapes }: { c: Palette; shapes: LandShape[] }) {
   return (
     <G>
-      {LAND.map((l, i) => (
+      {shapes.map((l, i) => (
         <Path key={i} d={l.d} fill={c.land[l.c]} />
       ))}
     </G>
   );
 });
 
-// Countries still to paint, and land outside the game until the map is
-// done, drawn blank on top of their colours. Only changes when a country is
-// painted.
-const Blank = memo(function Blank({ c, filled }: { c: Palette; filled: ReadonlySet<string> }) {
-  const done = filled.size >= COUNTRIES.length;
+// Places still to paint, and land outside the game, drawn blank on top of
+// their colours. On the world, land outside the game gets its colour once the
+// map is done; around a country, the neighbours stay blank. Only changes when
+// a place is painted.
+const Blank = memo(function Blank({ c, board, filled }: { c: Palette; board: Board; filled: ReadonlySet<string> }) {
+  const done = !board.country && filled.size >= board.regions.length;
   return (
     <G fill={c.blank}>
-      {LAND.map((l, i) => ((l.iso ? !filled.has(l.iso) : !done) ? <Path key={i} d={l.d} /> : null))}
+      {board.shapes.map((l, i) =>
+        (l.iso ? !filled.has(l.iso) : !done) ? (
+          <Path key={i} d={l.d} fill={!l.iso && board.country ? c.outside : undefined} />
+        ) : null,
+      )}
     </G>
   );
 });

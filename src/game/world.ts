@@ -1,18 +1,22 @@
 import data from '@/data/world.json';
 
-export type Country = {
+/** A place on a map: a country on the world, or a region on a country's map. */
+export type Place = {
   iso: string;
   en: string;
   es: string;
-  continent: string;
-  region: string;
   /** 1 (everyone knows it) to 5 (microstates and small islands). */
   tier: number;
-  /** Too small to see at world scale; drawn with a ring around it. */
+  /** Too small to see at the map's scale; drawn with a ring around it. */
   tiny: boolean;
   center: [number, number];
   /** Zoom frame in map units: x, y, width, height. */
   box: [number, number, number, number];
+};
+
+export type Country = Place & {
+  continent: string;
+  region: string;
   capital: { en: string; es: string; x: number; y: number } | null;
 };
 
