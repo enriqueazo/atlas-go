@@ -27,6 +27,7 @@ const es = {
   toNext: (n: number) => (n === 1 ? 'Falta 1 para subir de nivel' : `Faltan ${n} para subir de nivel`),
   maxLevel: 'Nivel máximo',
   close: 'Salir',
+  resetMap: 'Volver a centrar el mapa',
 
   recordLabel: (n: number) => `Récord: ${n}`,
   rankingTitle: 'Ranking',
@@ -84,6 +85,7 @@ const en: Strings = {
   toNext: (n: number) => `${n} more to level up`,
   maxLevel: 'Top level',
   close: 'Quit',
+  resetMap: 'Recenter the map',
 
   recordLabel: (n: number) => `Record: ${n}`,
   rankingTitle: 'Ranking',

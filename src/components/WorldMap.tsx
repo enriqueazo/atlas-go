@@ -1,7 +1,9 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PanResponder,
   Platform,
+  Pressable,
   StyleSheet,
   View,
   type GestureResponderEvent,
@@ -11,7 +13,7 @@ import {
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 
 import { LAND, MAP_HEIGHT, MAP_WIDTH, type Country } from '@/game/world';
-import type { Mode } from '@/settings';
+import { useSettings, type Mode } from '@/settings';
 import { radius, useColors, type Palette } from '@/theme';
 
 type Frame = { x: number; y: number; w: number; h: number };
@@ -28,23 +30,26 @@ const DURATION = 850;
 /** One heartbeat of the glow around the asked country, and the spotlight fade-in. */
 const PULSE = 1600;
 const FADE = 500;
-/** How far the player can zoom with a pinch, as frame widths in map units. */
+/** How far the player can zoom in, as a frame width in map units. */
 const MIN_W = 40;
-const MAX_W = MAP_WIDTH * 1.5;
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+/**
+ * The widest frame that still shows each place once: no wider and no taller
+ * than one world, so zooming out never shows the map repeating.
+ */
+const maxWidth = (aspect: number) => Math.min(MAP_WIDTH, MAP_HEIGHT * aspect);
 
 function frameFor(focus: Country | null, aspect: number): Frame {
   if (!focus) {
-    // The map wraps, so there is no empty margin to show: fill the card,
-    // with a peek at the neighbouring copies on a tall card.
-    const w = Math.min(MAP_WIDTH * 1.04, MAP_HEIGHT * 1.3 * aspect);
+    const w = maxWidth(aspect);
     return { x: MAP_WIDTH / 2 - w / 2, y: MAP_HEIGHT / 2 - w / aspect / 2, w, h: w / aspect };
   }
   const [bx, by, bw, bh] = focus.box;
   // Leave room around the country so its neighbours give context.
   const context = focus.tiny ? 130 : 110;
   const pad = Math.max(bw, bh) > 150 ? 1.35 : 2.2;
-  const w = Math.min(Math.max(bw * pad, bh * pad * aspect, context), MAP_WIDTH * 1.04);
+  const w = Math.min(Math.max(bw * pad, bh * pad * aspect, context), maxWidth(aspect));
   const h = w / aspect;
   const [cx, cy] = focus.tiny ? focus.center : [bx + bw / 2, by + bh / 2];
   return { x: cx - w / 2, y: cy - h / 2, w, h };
@@ -88,6 +93,10 @@ const touchesOf = (e: GestureResponderEvent): Touch[] =>
 
 export function WorldMap({ focus, mode, status }: Props) {
   const c = useColors();
+  const { t } = useSettings();
+  // Whether the player has dragged or zoomed away from where the game put
+  // the camera, which shows the recenter button.
+  const [moved, setMoved] = useState(false);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [frame, setFrame] = useState<Frame | null>(null);
   const current = useRef<Frame | null>(null);
@@ -119,7 +128,7 @@ export function WorldMap({ focus, mode, status }: Props) {
   // point (sx, sy) of `start` under the screen point (ex, ey).
   const zoomed = (start: Frame, w: number, sx: number, sy: number, ex: number, ey: number): Frame => {
     const s = sizeRef.current!;
-    w = Math.min(MAX_W, Math.max(MIN_W, w));
+    w = Math.min(maxWidth(s.w / s.h), Math.max(MIN_W, w));
     const h = w / (s.w / s.h);
     const k0 = start.w / s.w;
     const k1 = w / s.w;
@@ -134,6 +143,10 @@ export function WorldMap({ focus, mode, status }: Props) {
       cancelAnimationFrame(flight.current);
       const f = current.current;
       gesture.current = f ? { frame: f, touches: touchesOf(e) } : null;
+    };
+    const move = (f: Frame) => {
+      show(f);
+      setMoved(true);
     };
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -152,7 +165,7 @@ export function WorldMap({ focus, mode, status }: Props) {
         if (touches.length === 1) {
           const k = g.frame.w / sizeRef.current.w;
           const [a, b] = [g.touches[0], touches[0]];
-          show({ ...g.frame, x: g.frame.x - (b.x - a.x) * k, y: g.frame.y - (b.y - a.y) * k });
+          move({ ...g.frame, x: g.frame.x - (b.x - a.x) * k, y: g.frame.y - (b.y - a.y) * k });
           return;
         }
         const [a0, a1] = g.touches;
@@ -160,7 +173,7 @@ export function WorldMap({ focus, mode, status }: Props) {
         const d0 = Math.hypot(a1.x - a0.x, a1.y - a0.y);
         const d1 = Math.hypot(b1.x - b0.x, b1.y - b0.y);
         if (d0 < 1 || d1 < 1) return;
-        show(
+        move(
           zoomed(
             g.frame,
             (g.frame.w * d0) / d1,
@@ -193,6 +206,7 @@ export function WorldMap({ focus, mode, status }: Props) {
       const r = node.getBoundingClientRect();
       const [x, y] = [e.clientX - r.left, e.clientY - r.top];
       show(zoomed(f, f.w * Math.exp(e.deltaY * 0.0015), x, y, x, y));
+      setMoved(true);
     };
     node.addEventListener('wheel', onWheel, { passive: false });
     return () => node.removeEventListener('wheel', onWheel);
@@ -200,28 +214,26 @@ export function WorldMap({ focus, mode, status }: Props) {
 
   // Fly from the current frame to the next: zoom in log scale and lift out a
   // little when the jump is long, like a camera hopping across the globe.
-  useEffect(() => {
-    if (!size) return;
+  const fly = (target: Frame) => {
     const from = current.current;
-    if (!from) {
-      show(frameFor(focus, size.w / size.h));
-      return;
-    }
+    const s = sizeRef.current;
+    cancelAnimationFrame(flight.current);
+    if (!from || !s) return show(target);
     // Head for the nearest copy of the target, so the camera takes the short
     // way round (Alaska to Russia crosses the Pacific).
-    const to = nearest(frameFor(focus, size.w / size.h), from);
+    const to = nearest(target, from);
     const fc = [from.x + from.w / 2, from.y + from.h / 2];
     const tc = [to.x + to.w / 2, to.y + to.h / 2];
     const dist = Math.hypot(tc[0] - fc[0], tc[1] - fc[1]);
     const lift = Math.min(dist / Math.max(from.w, to.w), 2.5) * 0.5;
-    const aspect = size.w / size.h;
+    const aspect = s.w / s.h;
     const start = Date.now();
     const tick = () => {
       const t = Math.min(1, (Date.now() - start) / DURATION);
       const e = ease(t);
       const w = Math.min(
         from.w * Math.pow(to.w / from.w, e) * (1 + lift * Math.sin(Math.PI * e)),
-        MAP_WIDTH * 1.2,
+        maxWidth(aspect),
       );
       const h = w / aspect;
       const cx = fc[0] + (tc[0] - fc[0]) * e;
@@ -232,6 +244,16 @@ export function WorldMap({ focus, mode, status }: Props) {
       if (t < 1) flight.current = requestAnimationFrame(tick);
     };
     flight.current = requestAnimationFrame(tick);
+  };
+
+  const recenter = () => {
+    if (!size) return;
+    setMoved(false);
+    fly(frameFor(focus, size.w / size.h));
+  };
+
+  useEffect(() => {
+    recenter();
     return () => cancelAnimationFrame(flight.current);
   }, [focus, size]);
 
@@ -275,109 +297,131 @@ export function WorldMap({ focus, mode, status }: Props) {
   const tiles = frame ? tilesFor(frame) : [];
 
   return (
-    <View
-      ref={view}
-      style={[styles.card, Platform.OS === 'web' && styles.web, { backgroundColor: c.ocean, borderColor: c.border }]}
-      onLayout={onLayout}
-      {...responder.panHandlers}
-    >
-      {frame && (
-        <Svg width="100%" height="100%" viewBox={`${frame.x} ${frame.y} ${frame.w} ${frame.h}`}>
-          <Rect x={frame.x - 10} y={frame.y - 10} width={frame.w + 20} height={frame.h + 20} fill={c.ocean} />
-          {tiles.map(([x, y]) => (
-            <G key={`${x} ${y}`} transform={`translate(${x} ${y})`}>
-              <Waves color={c.oceanDeep} px={px} />
-              <G transform={`translate(0 ${2.5 * px})`}>
-                <LandShadow c={c} />
-              </G>
-            </G>
-          ))}
-          {tiles.map(([x, y]) => (
-            <G
-              key={`${x} ${y}`}
-              transform={`translate(${x} ${y})`}
-              stroke={c.landStroke}
-              strokeWidth={1.1 * px}
-              strokeLinejoin="round"
-            >
-              <Land c={c} />
-            </G>
-          ))}
-          {/* Spotlight: wash out the rest of the world around the asked country. */}
-          {dim > 0 && (
+    <View style={[styles.card, { backgroundColor: c.ocean, borderColor: c.border }]}>
+      <View
+        ref={view}
+        style={[StyleSheet.absoluteFill, Platform.OS === 'web' && styles.web]}
+        onLayout={onLayout}
+        {...responder.panHandlers}
+      >
+        {frame && (
+          <Svg width="100%" height="100%" viewBox={`${frame.x} ${frame.y} ${frame.w} ${frame.h}`}>
             <Rect
               x={frame.x - 10}
               y={frame.y - 10}
               width={frame.w + 20}
               height={frame.h + 20}
-              fill={c.dim}
-              fillOpacity={dim}
+              fill={c.ocean}
             />
-          )}
-          {tiles.map(([x, y]) => (
-            <G key={`${x} ${y}`} transform={`translate(${x} ${y})`}>
-              {shape && (
-                <G strokeLinejoin="round">
-                  <Path
-                    d={shape.d}
-                    fill="none"
-                    stroke={accent}
-                    strokeOpacity={0.35 + 0.25 * pulse}
-                    strokeWidth={(9 + 5 * pulse) * px}
-                  />
-                  <Path
-                    d={shape.d}
-                    fill={accent}
-                    fillOpacity={mode === 'capitals' ? 0.75 : 1}
-                    stroke={c.highlightEdge}
-                    strokeWidth={2.4 * px}
-                  />
+            {tiles.map(([x, y]) => (
+              <G key={`${x} ${y}`} transform={`translate(${x} ${y})`}>
+                <Waves color={c.oceanDeep} px={px} />
+                <G transform={`translate(0 ${2.5 * px})`}>
+                  <LandShadow c={c} />
                 </G>
-              )}
-              {ring && (
-                <G>
-                  <Circle
-                    cx={focus.center[0]}
-                    cy={focus.center[1]}
-                    r={(18 + 8 * pulse) * px}
-                    fill="none"
-                    stroke={accent}
-                    strokeOpacity={0.6 - 0.4 * pulse}
-                    strokeWidth={3 * px}
-                  />
-                  <Circle
-                    cx={focus.center[0]}
-                    cy={focus.center[1]}
-                    r={15 * px}
-                    fill={accent}
-                    fillOpacity={0.2}
-                    stroke={c.highlightEdge}
-                    strokeWidth={2.5 * px}
-                  />
-                </G>
-              )}
-              {capital && (
-                <G>
-                  <Circle
-                    cx={capital.x}
-                    cy={capital.y}
-                    r={(13 + 7 * pulse) * px}
-                    fill={accent}
-                    fillOpacity={0.45 - 0.3 * pulse}
-                  />
-                  <Circle
-                    cx={capital.x}
-                    cy={capital.y}
-                    r={8 * px}
-                    fill={status === 'ask' ? c.marker : accent}
-                    stroke={c.markerEdge}
-                    strokeWidth={3 * px}
-                  />
-                </G>
-              )}
-            </G>
-          ))}
-        </Svg>
+              </G>
+            ))}
+            {tiles.map(([x, y]) => (
+              <G
+                key={`${x} ${y}`}
+                transform={`translate(${x} ${y})`}
+                stroke={c.landStroke}
+                strokeWidth={1.1 * px}
+                strokeLinejoin="round"
+              >
+                <Land c={c} />
+              </G>
+            ))}
+            {/* Spotlight: wash out the rest of the world around the asked country. */}
+            {dim > 0 && (
+              <Rect
+                x={frame.x - 10}
+                y={frame.y - 10}
+                width={frame.w + 20}
+                height={frame.h + 20}
+                fill={c.dim}
+                fillOpacity={dim}
+              />
+            )}
+            {tiles.map(([x, y]) => (
+              <G key={`${x} ${y}`} transform={`translate(${x} ${y})`}>
+                {shape && (
+                  <G strokeLinejoin="round">
+                    <Path
+                      d={shape.d}
+                      fill="none"
+                      stroke={accent}
+                      strokeOpacity={0.35 + 0.25 * pulse}
+                      strokeWidth={(9 + 5 * pulse) * px}
+                    />
+                    <Path
+                      d={shape.d}
+                      fill={accent}
+                      fillOpacity={mode === 'capitals' ? 0.75 : 1}
+                      stroke={c.highlightEdge}
+                      strokeWidth={2.4 * px}
+                    />
+                  </G>
+                )}
+                {ring && (
+                  <G>
+                    <Circle
+                      cx={focus.center[0]}
+                      cy={focus.center[1]}
+                      r={(18 + 8 * pulse) * px}
+                      fill="none"
+                      stroke={accent}
+                      strokeOpacity={0.6 - 0.4 * pulse}
+                      strokeWidth={3 * px}
+                    />
+                    <Circle
+                      cx={focus.center[0]}
+                      cy={focus.center[1]}
+                      r={15 * px}
+                      fill={accent}
+                      fillOpacity={0.2}
+                      stroke={c.highlightEdge}
+                      strokeWidth={2.5 * px}
+                    />
+                  </G>
+                )}
+                {capital && (
+                  <G>
+                    <Circle
+                      cx={capital.x}
+                      cy={capital.y}
+                      r={(13 + 7 * pulse) * px}
+                      fill={accent}
+                      fillOpacity={0.45 - 0.3 * pulse}
+                    />
+                    <Circle
+                      cx={capital.x}
+                      cy={capital.y}
+                      r={8 * px}
+                      fill={status === 'ask' ? c.marker : accent}
+                      stroke={c.markerEdge}
+                      strokeWidth={3 * px}
+                    />
+                  </G>
+                )}
+              </G>
+            ))}
+          </Svg>
+        )}
+      </View>
+      {moved && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t.resetMap}
+          onPress={recenter}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.reset,
+            { backgroundColor: c.surface, borderColor: c.border, opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <MaterialCommunityIcons name="crosshairs-gps" size={22} color={c.purple} />
+        </Pressable>
       )}
     </View>
   );
@@ -385,9 +429,26 @@ export function WorldMap({ focus, mode, status }: Props) {
 
 // Little cartoon waves scattered over the open ocean.
 const WAVES: [number, number][] = [
-  [70, 240], [130, 330], [60, 120], [250, 300], [200, 400], [330, 430], [400, 210], [440, 310],
-  [370, 360], [500, 430], [640, 300], [700, 370], [610, 420], [780, 410], [880, 300], [940, 200],
-  [820, 250], [960, 380], [520, 20], [300, 20],
+  [70, 240],
+  [130, 330],
+  [60, 120],
+  [250, 300],
+  [200, 400],
+  [330, 430],
+  [400, 210],
+  [440, 310],
+  [370, 360],
+  [500, 430],
+  [640, 300],
+  [700, 370],
+  [610, 420],
+  [780, 410],
+  [880, 300],
+  [940, 200],
+  [820, 250],
+  [960, 380],
+  [520, 20],
+  [300, 20],
 ];
 const WAVE = 'm-6 0q1.5 -2.5 3 0t3 0t3 0t3 0';
 
@@ -429,6 +490,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  reset: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // Keep the browser from scrolling or zooming the page while the map is
   // dragged or pinched.
