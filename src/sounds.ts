@@ -36,8 +36,14 @@ export function useSound() {
       try {
         const p = player(cue);
         p.volume = volume;
-        p.seekTo(0).catch(() => {});
-        p.play();
+        if (p.playing || p.currentTime > 0) {
+          // Played before: rewind first and only then play. Calling play()
+          // while the seek is still pending is lost on a finished player, so
+          // every other answer was silent.
+          p.seekTo(0).then(() => p.play()).catch(() => {});
+        } else {
+          p.play();
+        }
       } catch {
         // Sound is a nice-to-have; never break the game over it.
       }
