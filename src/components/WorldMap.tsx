@@ -12,24 +12,37 @@ import {
 } from 'react-native';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 
-import { LAND, MAP_HEIGHT, MAP_WIDTH, type Country } from '@/game/world';
+import { COUNTRIES, LAND, MAP_HEIGHT, MAP_WIDTH, type Country } from '@/game/world';
 import { useSettings, type Mode } from '@/settings';
 import { radius, useColors, type Palette } from '@/theme';
 
 type Frame = { x: number; y: number; w: number; h: number };
 export type MapStatus = 'ask' | 'right' | 'wrong';
+/** A country that just got painted, or was tapped by mistake. */
+export type Flash = { iso: string; kind: 'right' | 'wrong'; at: number };
 
 type Props = {
   /** Country to zoom to; null shows the whole world. */
   focus: Country | null;
   mode: Mode;
   status: MapStatus;
+  /**
+   * Complete the map: countries not painted yet show blank, and the camera
+   * stays where the player leaves it.
+   */
+  paint?: { filled: ReadonlySet<string>; flash: Flash | null };
+  /** A tap (not a drag) at map point (x, y); `px` is map units per screen pixel. */
+  onTap?: (x: number, y: number, px: number) => void;
 };
 
 const DURATION = 850;
 /** One heartbeat of the glow around the asked country, and the spotlight fade-in. */
 const PULSE = 1600;
 const FADE = 500;
+/** How long a painted or mistaken country stays lit. */
+const FLASH = 900;
+/** A touch that moves less than this many pixels is a tap. */
+const TAP_SLOP = 8;
 /** How far the player can zoom in, as a frame width in map units. */
 const MIN_W = 40;
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -91,7 +104,10 @@ type Touch = { x: number; y: number };
 const touchesOf = (e: GestureResponderEvent): Touch[] =>
   Array.from(e.nativeEvent.touches ?? [], (t) => ({ x: t.pageX, y: t.pageY }));
 
-export function WorldMap({ focus, mode, status }: Props) {
+const COLOR_OF = new Map(LAND.map((l) => [l.iso, l.c]));
+const TINY = COUNTRIES.filter((c) => c.tiny);
+
+export function WorldMap({ focus, mode, status, paint, onTap }: Props) {
   const c = useColors();
   const { t } = useSettings();
   // Whether the player has dragged or zoomed away from where the game put
@@ -106,6 +122,8 @@ export function WorldMap({ focus, mode, status }: Props) {
   const origin = useRef({ x: 0, y: 0 });
   const sizeRef = useRef(size);
   sizeRef.current = size;
+  const onTapRef = useRef(onTap);
+  onTapRef.current = onTap;
 
   const measure = () =>
     view.current?.measure((_x, _y, _w, _h, pageX, pageY) => {
@@ -138,6 +156,8 @@ export function WorldMap({ focus, mode, status }: Props) {
   // Drag to move the camera anywhere, pinch to zoom. A new finger restarts
   // the gesture from where the camera is, so drag and pinch blend smoothly.
   const gesture = useRef<{ frame: Frame; touches: Touch[] } | null>(null);
+  // Where a touch started, until it moves too far or a second finger lands.
+  const tap = useRef<Touch | null>(null);
   const responder = useMemo(() => {
     const begin = (e: GestureResponderEvent) => {
       cancelAnimationFrame(flight.current);
@@ -155,10 +175,16 @@ export function WorldMap({ focus, mode, status }: Props) {
       onPanResponderGrant: (e) => {
         measure();
         begin(e);
+        const touches = touchesOf(e);
+        tap.current = touches.length === 1 ? touches[0] : null;
       },
       onPanResponderMove: (e) => {
         const g = gesture.current;
         const touches = touchesOf(e);
+        const s = tap.current;
+        if (s && (touches.length !== 1 || Math.hypot(touches[0].x - s.x, touches[0].y - s.y) > TAP_SLOP)) {
+          tap.current = null;
+        }
         if (!g || !sizeRef.current || touches.length === 0) return;
         if (touches.length !== g.touches.length) return begin(e);
         const o = origin.current;
@@ -186,6 +212,12 @@ export function WorldMap({ focus, mode, status }: Props) {
       },
       onPanResponderRelease: () => {
         gesture.current = null;
+        const s = tap.current;
+        const f = current.current;
+        tap.current = null;
+        if (!s || !f || !sizeRef.current || !onTapRef.current) return;
+        const k = f.w / sizeRef.current.w;
+        onTapRef.current(f.x + (s.x - origin.current.x) * k, f.y + (s.y - origin.current.y) * k, k);
       },
       onPanResponderTerminate: () => {
         gesture.current = null;
@@ -252,10 +284,22 @@ export function WorldMap({ focus, mode, status }: Props) {
     fly(frameFor(focus, size.w / size.h));
   };
 
+  const painting = !!paint;
   useEffect(() => {
+    const f = current.current;
+    if (!focus && painting && f && size) {
+      // Painting the map, the camera stays put between countries: only fit
+      // the frame to the new shape of the card.
+      const aspect = size.w / size.h;
+      const w = Math.min(f.w, maxWidth(aspect));
+      const h = w / aspect;
+      cancelAnimationFrame(flight.current);
+      show({ x: f.x + f.w / 2 - w / 2, y: f.y + f.h / 2 - h / 2, w, h });
+      return;
+    }
     recenter();
     return () => cancelAnimationFrame(flight.current);
-  }, [focus, size]);
+  }, [focus, size, painting]);
 
   const shape = useMemo(() => (focus ? LAND.find((l) => l.iso === focus.iso) : undefined), [focus]);
 
@@ -283,6 +327,22 @@ export function WorldMap({ focus, mode, status }: Props) {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [asking]);
+
+  // A painted or mistaken country lights up and fades.
+  const flash = paint?.flash ?? null;
+  const [, setFlashTick] = useState(0);
+  useEffect(() => {
+    if (!flash) return;
+    let raf = 0;
+    const tick = () => {
+      setFlashTick((n) => n + 1);
+      if (Date.now() < flash.at + FLASH) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [flash]);
+  const flashLeft = flash ? Math.max(0, 1 - (Date.now() - flash.at) / FLASH) : 0;
+  const flashShape = useMemo(() => (flash ? LAND.find((l) => l.iso === flash.iso) : undefined), [flash]);
 
   // Map units per screen pixel, so strokes and markers keep their size.
   const px = frame && size ? frame.w / size.w : 1;
@@ -330,6 +390,7 @@ export function WorldMap({ focus, mode, status }: Props) {
                 strokeLinejoin="round"
               >
                 <Land c={c} />
+                {paint && <Blank c={c} filled={paint.filled} />}
               </G>
             ))}
             {/* Spotlight: wash out the rest of the world around the asked country. */}
@@ -345,6 +406,35 @@ export function WorldMap({ focus, mode, status }: Props) {
             )}
             {tiles.map(([x, y]) => (
               <G key={`${x} ${y}`} transform={`translate(${x} ${y})`}>
+                {/* Tiny countries get a ring to tap, filled in once painted. */}
+                {paint &&
+                  TINY.map((t) => {
+                    const done = paint.filled.has(t.iso);
+                    return (
+                      <Circle
+                        key={t.iso}
+                        cx={t.center[0]}
+                        cy={t.center[1]}
+                        r={(done ? 5 : 7) * px}
+                        fill={done ? c.land[COLOR_OF.get(t.iso) ?? 0] : c.blank}
+                        fillOpacity={done ? 1 : 0.5}
+                        stroke={done ? c.landStroke : c.blankRing}
+                        strokeWidth={1.5 * px}
+                      />
+                    );
+                  })}
+                {flashShape && flashLeft > 0 && (
+                  <G strokeLinejoin="round">
+                    <Path
+                      d={flashShape.d}
+                      fill={flash!.kind === 'right' ? c.highlightEdge : c.wrong}
+                      fillOpacity={(flash!.kind === 'right' ? 0.6 : 0.8) * flashLeft}
+                      stroke={flash!.kind === 'right' ? c.green : c.wrong}
+                      strokeOpacity={flashLeft}
+                      strokeWidth={(3 + 6 * flashLeft) * px}
+                    />
+                  </G>
+                )}
                 {shape && (
                   <G strokeLinejoin="round">
                     <Path
@@ -480,6 +570,18 @@ const Land = memo(function Land({ c }: { c: Palette }) {
       {LAND.map((l, i) => (
         <Path key={i} d={l.d} fill={c.land[l.c]} />
       ))}
+    </G>
+  );
+});
+
+// Countries still to paint, and land outside the game until the map is
+// done, drawn blank on top of their colours. Only changes when a country is
+// painted.
+const Blank = memo(function Blank({ c, filled }: { c: Palette; filled: ReadonlySet<string> }) {
+  const done = filled.size >= COUNTRIES.length;
+  return (
+    <G fill={c.blank}>
+      {LAND.map((l, i) => ((l.iso ? !filled.has(l.iso) : !done) ? <Path key={i} d={l.d} /> : null))}
     </G>
   );
 });

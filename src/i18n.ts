@@ -13,6 +13,8 @@ const es = {
   modeCountriesDesc: 'Te marcamos un país: elige su nombre. Cada pocos aciertos, más difícil.',
   modeCapitals: 'Capitales',
   modeCapitalsDesc: 'Un punto marca una capital: elige cuál es. Si fallas, vuelves a 0.',
+  modeComplete: 'Completa el mapa',
+  modeCompleteDesc: 'Te decimos un país: tócalo en el mapa para pintarlo. ¿Llenas el mundo entero?',
   record: 'Récord',
   points: 'Puntos',
 
@@ -28,6 +30,20 @@ const es = {
   maxLevel: 'Nivel máximo',
   close: 'Salir',
   resetMap: 'Volver a centrar el mapa',
+
+  find: 'Encuentra',
+  showHere: 'Está aquí: tócalo para pintarlo',
+  tapHint: 'Toca el país en el mapa. Arrastra y pellizca para moverte.',
+  painted: (name: string) => `¡Bien! ${name} ya tiene color`,
+  thatIs: (name: string) => `Eso es ${name}`,
+  sea: 'Ahí solo hay mar',
+  skip: 'Saltar',
+  filledOf: (n: number, total: number) => `${n}/${total}`,
+  filledLabel: (n: number, total: number) => `${n} de ${total} países pintados`,
+  mapDone: '¡Mapa completo!',
+  mapDoneStats: (total: number, misses: number) =>
+    `${total} países pintados · ${misses === 1 ? '1 fallo' : `${misses} fallos`}`,
+  startOver: 'Empezar de nuevo',
 
   recordLabel: (n: number) => `Récord: ${n}`,
   rankingTitle: 'Ranking',
@@ -71,6 +87,8 @@ const en: Strings = {
   modeCountriesDesc: 'We mark a country: pick its name. Every few right answers, it gets harder.',
   modeCapitals: 'Capitals',
   modeCapitalsDesc: 'A dot marks a capital: pick which one. Miss and you go back to 0.',
+  modeComplete: 'Complete the map',
+  modeCompleteDesc: 'We name a country: tap it on the map to paint it. Can you fill the whole world?',
   record: 'Record',
   points: 'Points',
 
@@ -86,6 +104,20 @@ const en: Strings = {
   maxLevel: 'Top level',
   close: 'Quit',
   resetMap: 'Recenter the map',
+
+  find: 'Find',
+  showHere: 'It’s here: tap it to paint it',
+  tapHint: 'Tap the country on the map. Drag and pinch to move around.',
+  painted: (name: string) => `Nice! ${name} is painted`,
+  thatIs: (name: string) => `That’s ${name}`,
+  sea: 'Only sea there',
+  skip: 'Skip',
+  filledOf: (n: number, total: number) => `${n}/${total}`,
+  filledLabel: (n: number, total: number) => `${n} of ${total} countries painted`,
+  mapDone: 'Map complete!',
+  mapDoneStats: (total: number, misses: number) =>
+    `${total} countries painted · ${misses === 1 ? '1 miss' : `${misses} misses`}`,
+  startOver: 'Start over',
 
   recordLabel: (n: number) => `Record: ${n}`,
   rankingTitle: 'Ranking',

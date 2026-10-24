@@ -8,12 +8,18 @@ import { OptionCard, type OptionStatus } from '@/components/OptionCard';
 import { tabBarStyle } from '@/components/tabBar';
 import { Button, Chip, Screen } from '@/components/ui';
 import { WorldMap } from '@/components/WorldMap';
+import { WORLD_BOARD } from '@/game/complete';
 import { levelFor, MAX_LEVEL, nextQuestion, optionLabel, PER_LEVEL, pointsFor, type Question } from '@/game/engine';
+import { useBoardProgress } from '@/game/progress';
+import { useCompleteGame } from '@/game/useCompleteGame';
+import { BY_ISO } from '@/game/world';
 import { useSettings, type Mode } from '@/settings';
 import { useSound } from '@/sounds';
 import { fonts, radius, space, themed } from '@/theme';
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
+/** The quiz modes keep a record; Complete the map keeps its progress instead. */
+type Play = Mode | 'complete';
 
 // One screen for the lobby and the game, so the map can zoom from the whole
 // world into the first question and back out when you quit.
@@ -24,7 +30,7 @@ export default function Game() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
-  const [mode, setMode] = useState<Mode | null>(null);
+  const [mode, setMode] = useState<Play | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
   const [points, setPoints] = useState(0);
@@ -34,8 +40,11 @@ export default function Game() {
   const recent = useRef<string[]>([]);
   // Whether this run already passed the record, so the fanfare plays once.
   const celebrated = useRef(false);
+  const progress = useBoardProgress(WORLD_BOARD);
+  const complete = useCompleteGame(WORLD_BOARD, progress, play);
 
-  const playing = mode !== null && question !== null;
+  const painting = mode === 'complete';
+  const playing = painting || (mode !== null && question !== null);
 
   // The tab bar steps aside while a game is on.
   useEffect(() => {
@@ -58,8 +67,13 @@ export default function Game() {
     setPicked(null);
   };
 
-  const start = (m: Mode) => {
+  const start = (m: Play) => {
     play('zoom');
+    if (m === 'complete') {
+      setMode(m);
+      complete.start();
+      return;
+    }
     recent.current = [];
     setMode(m);
     setPoints(0);
@@ -76,7 +90,7 @@ export default function Game() {
   };
 
   const answer = (i: number) => {
-    if (!question || !mode || picked !== null) return;
+    if (!question || !mode || mode === 'complete' || picked !== null) return;
     setPicked(i);
     if (i === question.answer) {
       const pts = pointsFor(question);
@@ -102,7 +116,7 @@ export default function Game() {
   };
 
   const next = () => {
-    if (!mode) return;
+    if (!mode || mode === 'complete') return;
     play('tap');
     ask(mode, streak);
   };
@@ -110,15 +124,45 @@ export default function Game() {
   const answered = picked !== null;
   const right = answered && picked === question?.answer;
   const status = !answered ? 'ask' : right ? 'right' : 'wrong';
-  const modes: { id: Mode; icon: IconName; title: string; description: string }[] = [
-    { id: 'countries', icon: 'earth', title: t.modeCountries, description: t.modeCountriesDesc },
-    { id: 'capitals', icon: 'map-marker-star-outline', title: t.modeCapitals, description: t.modeCapitalsDesc },
+  const modes: { id: Play; icon: IconName; title: string; description: string; chip: string | null }[] = [
+    {
+      id: 'countries',
+      icon: 'earth',
+      title: t.modeCountries,
+      description: t.modeCountriesDesc,
+      chip: records.countries > 0 ? t.recordLabel(records.countries) : null,
+    },
+    {
+      id: 'capitals',
+      icon: 'map-marker-star-outline',
+      title: t.modeCapitals,
+      description: t.modeCapitalsDesc,
+      chip: records.capitals > 0 ? t.recordLabel(records.capitals) : null,
+    },
+    {
+      id: 'complete',
+      icon: 'map-check-outline',
+      title: t.modeComplete,
+      description: t.modeCompleteDesc,
+      chip: progress.filled.size > 0 ? t.filledOf(progress.filled.size, progress.total) : null,
+    },
   ];
 
   return (
     <Screen>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        {playing ? (
+        {painting ? (
+          <View style={styles.header}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t.close} onPress={quit} hitSlop={12}>
+              <Text style={styles.close}>✕</Text>
+            </Pressable>
+            <View style={styles.streak} accessibilityLabel={t.filledLabel(progress.filled.size, progress.total)}>
+              <MaterialCommunityIcons name="map-check-outline" size={20} color={colors.purpleSoft} />
+              <Text style={styles.streakText}>{t.modeComplete}</Text>
+            </View>
+            <Text style={styles.score}>{t.filledOf(progress.filled.size, progress.total)}</Text>
+          </View>
+        ) : playing ? (
           <View style={styles.header}>
             <Pressable accessibilityRole="button" accessibilityLabel={t.close} onPress={quit} hitSlop={12}>
               <Text style={styles.close}>✕</Text>
@@ -144,10 +188,22 @@ export default function Game() {
         )}
 
         <View style={styles.map}>
-          <WorldMap focus={question?.target ?? null} mode={mode ?? 'countries'} status={status} />
+          {painting ? (
+            <WorldMap
+              focus={complete.revealed ? complete.target : null}
+              mode="countries"
+              status="ask"
+              paint={{ filled: progress.filled, flash: complete.flash }}
+              onTap={complete.tap}
+            />
+          ) : (
+            <WorldMap focus={question?.target ?? null} mode={mode ?? 'countries'} status={status} />
+          )}
         </View>
 
-        {playing && question ? (
+        {painting ? (
+          <CompletePanel game={complete} filled={progress.filled.size} total={progress.total} misses={progress.misses} />
+        ) : playing && question ? (
           <View style={styles.panel}>
             <Text style={styles.prompt}>{question.mode === 'countries' ? t.askCountry : t.askCapital}</Text>
             <View style={styles.options}>
@@ -194,9 +250,9 @@ export default function Game() {
                   <MaterialCommunityIcons name={m.icon} size={28} color={colors.text} />
                 </View>
                 <View style={styles.modeText}>
-                  {records[m.id] > 0 && (
+                  {m.chip && (
                     <View style={styles.chips}>
-                      <Chip label={t.recordLabel(records[m.id])} tone="green" />
+                      <Chip label={m.chip} tone={m.id === 'complete' ? 'purple' : 'green'} />
                     </View>
                   )}
                   <Text style={styles.modeTitle}>{m.title}</Text>
@@ -209,6 +265,72 @@ export default function Game() {
         )}
       </SafeAreaView>
     </Screen>
+  );
+}
+
+/** The place to find, what the last tap was, and how much of the map is painted. */
+function CompletePanel({
+  game,
+  filled,
+  total,
+  misses,
+}: {
+  game: ReturnType<typeof useCompleteGame>;
+  filled: number;
+  total: number;
+  misses: number;
+}) {
+  const { colors, styles } = useThemed();
+  const { t, language } = useSettings();
+
+  if (game.done) {
+    return (
+      <View style={styles.panel}>
+        <View style={styles.footer}>
+          <View>
+            <Text style={[styles.verdict, { color: colors.green }]}>{t.mapDone}</Text>
+            <Text style={styles.answer}>{t.mapDoneStats(total, misses)}</Text>
+          </View>
+          <Button label={t.startOver} onPress={game.restart} />
+        </View>
+      </View>
+    );
+  }
+  if (!game.target) return <View style={styles.panel} />;
+
+  const note = game.note;
+  const name = (iso: string) => BY_ISO.get(iso)?.[language] ?? iso;
+  let noteText = t.tapHint;
+  let noteColor = colors.textMuted;
+  if (note?.kind === 'right') [noteText, noteColor] = [t.painted(name(note.iso)), colors.green];
+  else if (note?.kind === 'wrong') [noteText, noteColor] = [t.thatIs(name(note.iso)), colors.wrong];
+  else if (note?.kind === 'sea') noteText = t.sea;
+
+  return (
+    <View style={styles.panel}>
+      <View>
+        <Text style={styles.prompt}>{game.revealed ? t.showHere : t.find}</Text>
+        <Text style={styles.target} numberOfLines={1} adjustsFontSizeToFit>
+          {game.target[language]}
+        </Text>
+        <Text style={[styles.note, { color: noteColor }]} numberOfLines={2}>
+          {noteText}
+        </Text>
+      </View>
+      <View style={styles.levelCard}>
+        <View style={styles.levelRow}>
+          <Text style={styles.levelText} accessibilityLabel={t.filledLabel(filled, total)}>
+            {t.filledOf(filled, total)}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={game.skip} hitSlop={12}>
+            <Text style={styles.skip}>{t.skip}</Text>
+          </Pressable>
+        </View>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${(filled / total) * 100}%` }]} />
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -323,12 +445,12 @@ const useThemed = themed((colors) => ({
       borderRadius: radius.lg,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: space(5),
+      padding: space(4),
       marginBottom: space(1),
     },
     modeIcon: {
-      width: 56,
-      height: 56,
+      width: 52,
+      height: 52,
       borderRadius: radius.md,
       backgroundColor: colors.purpleDeep,
       alignItems: 'center',
@@ -339,6 +461,9 @@ const useThemed = themed((colors) => ({
     modeTitle: { color: colors.text, fontFamily: fonts.heavy, fontSize: 18 },
     modeDescription: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
     prompt: { color: colors.textMuted, fontFamily: fonts.bold, fontSize: 15, lineHeight: 21 },
+    target: { color: colors.text, fontFamily: fonts.heavy, fontSize: 28, marginTop: space(1) },
+    note: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 20, minHeight: 40, marginTop: space(1) },
+    skip: { color: colors.purpleSoft, fontFamily: fonts.heavy, fontSize: 15 },
     options: { gap: space(3) },
     levelCard: {
       marginTop: space(1),

@@ -40,6 +40,9 @@ const dark = {
   /** Map: wash laid over everything but the asked country. */
   dim: '#0C0D1C',
   dimOpacity: 0.62,
+  /** Map: countries not painted yet in Complete the map, and the ring around tiny ones. */
+  blank: '#353042',
+  blankRing: '#A39DB0',
 };
 
 export type Palette = typeof dark;
@@ -72,6 +75,8 @@ const light: Palette = {
   markerEdge: '#1C1922',
   dim: '#F7F5FB',
   dimOpacity: 0.6,
+  blank: '#E6E1EF',
+  blankRing: '#6B6478',
 };
 
 export const PALETTES = { dark, light };
