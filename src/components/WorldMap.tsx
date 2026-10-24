@@ -17,6 +17,9 @@ type Props = {
 };
 
 const DURATION = 850;
+/** One heartbeat of the glow around the asked country, and the spotlight fade-in. */
+const PULSE = 1600;
+const FADE = 500;
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 function frameFor(focus: Country | null, aspect: number): Frame {
@@ -84,9 +87,40 @@ export function WorldMap({ focus, mode, status }: Props) {
 
   const shape = useMemo(() => (focus ? LAND.find((l) => l.iso === focus.iso) : undefined), [focus]);
 
+  // A slow heartbeat for the glow and rings while the question is open, and
+  // the spotlight fading in as the camera lands.
+  const asking = !!focus && status === 'ask';
+  const [clock, setClock] = useState(0);
+  const shownAt = useRef(0);
+  useEffect(() => {
+    shownAt.current = Date.now();
+    setClock(0);
+  }, [focus]);
+  useEffect(() => {
+    if (!asking) return;
+    let raf = 0;
+    let last = 0;
+    const tick = () => {
+      const now = Date.now();
+      if (now - last > 32) {
+        last = now;
+        setClock(now - shownAt.current);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [asking]);
+
   // Map units per screen pixel, so strokes and markers keep their size.
   const px = frame && size ? frame.w / size.w : 1;
   const accent = status === 'right' ? c.green : status === 'wrong' ? c.wrong : c.highlight;
+  const pulse = asking ? (1 - Math.cos((clock / PULSE) * 2 * Math.PI)) / 2 : 0;
+  const dim = focus ? (asking ? Math.min(1, clock / FADE) : 1) * c.dimOpacity : 0;
+  // Countries a few pixels wide on screen also get a ring, so they can't hide.
+  const small = !!focus && (focus.tiny || Math.max(focus.box[2], focus.box[3]) / px < 26);
+  const ring = focus && mode === 'countries' && small;
+  const capital = focus?.capital && mode === 'capitals' ? focus.capital : null;
 
   return (
     <View style={[styles.card, { backgroundColor: c.ocean, borderColor: c.border }]} onLayout={onLayout}>
@@ -99,36 +133,74 @@ export function WorldMap({ focus, mode, status }: Props) {
           </G>
           <G stroke={c.landStroke} strokeWidth={1.1 * px} strokeLinejoin="round">
             <Land c={c} />
-            {shape && (
+          </G>
+          {/* Spotlight: wash out the rest of the world around the asked country. */}
+          {dim > 0 && (
+            <Rect
+              x={-MAP_WIDTH}
+              y={-MAP_HEIGHT}
+              width={MAP_WIDTH * 3}
+              height={MAP_HEIGHT * 3}
+              fill={c.dim}
+              fillOpacity={dim}
+            />
+          )}
+          {shape && (
+            <G strokeLinejoin="round">
+              <Path
+                d={shape.d}
+                fill="none"
+                stroke={accent}
+                strokeOpacity={0.35 + 0.25 * pulse}
+                strokeWidth={(9 + 5 * pulse) * px}
+              />
               <Path
                 d={shape.d}
                 fill={accent}
-                fillOpacity={mode === 'capitals' ? 0.55 : 1}
-                strokeWidth={1.6 * px}
+                fillOpacity={mode === 'capitals' ? 0.75 : 1}
+                stroke={c.highlightEdge}
+                strokeWidth={2.4 * px}
               />
-            )}
-          </G>
-          {focus && mode === 'countries' && focus.tiny && (
-            <Circle
-              cx={focus.center[0]}
-              cy={focus.center[1]}
-              r={16 * px}
-              fill={accent}
-              fillOpacity={0.18}
-              stroke={accent}
-              strokeWidth={3 * px}
-            />
+            </G>
           )}
-          {focus?.capital && mode === 'capitals' && (
+          {ring && (
             <G>
-              <Circle cx={focus.capital.x} cy={focus.capital.y} r={11 * px} fill={c.landStroke} fillOpacity={0.25} />
               <Circle
-                cx={focus.capital.x}
-                cy={focus.capital.y}
-                r={7 * px}
-                fill={status === 'ask' ? c.marker : accent}
-                stroke={c.surface}
+                cx={focus.center[0]}
+                cy={focus.center[1]}
+                r={(18 + 8 * pulse) * px}
+                fill="none"
+                stroke={accent}
+                strokeOpacity={0.6 - 0.4 * pulse}
+                strokeWidth={3 * px}
+              />
+              <Circle
+                cx={focus.center[0]}
+                cy={focus.center[1]}
+                r={15 * px}
+                fill={accent}
+                fillOpacity={0.2}
+                stroke={c.highlightEdge}
                 strokeWidth={2.5 * px}
+              />
+            </G>
+          )}
+          {capital && (
+            <G>
+              <Circle
+                cx={capital.x}
+                cy={capital.y}
+                r={(13 + 7 * pulse) * px}
+                fill={accent}
+                fillOpacity={0.45 - 0.3 * pulse}
+              />
+              <Circle
+                cx={capital.x}
+                cy={capital.y}
+                r={8 * px}
+                fill={status === 'ask' ? c.marker : accent}
+                stroke={c.markerEdge}
+                strokeWidth={3 * px}
               />
             </G>
           )}

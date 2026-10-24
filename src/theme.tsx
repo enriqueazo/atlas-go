@@ -32,9 +32,14 @@ const dark = {
   landStroke: '#121016',
   /** Map: five country fills, picked so neighbours never match. */
   land: ['#6E5AA8', '#3F8F7A', '#4F74B0', '#A8607F', '#9C8A4E'],
-  /** Map: the country being asked and the capital dot. */
-  highlight: '#C4ABFF',
+  /** Map: the country being asked, its outline, and the capital dot. */
+  highlight: '#D2BFFF',
+  highlightEdge: '#FFFFFF',
   marker: '#FFFFFF',
+  markerEdge: '#121016',
+  /** Map: wash laid over everything but the asked country. */
+  dim: '#0C0D1C',
+  dimOpacity: 0.62,
 };
 
 export type Palette = typeof dark;
@@ -62,7 +67,11 @@ const light: Palette = {
   landStroke: '#4A4360',
   land: ['#FFD98A', '#9BE5BD', '#A8CDFF', '#FFB3CC', '#D2BFFF'],
   highlight: '#7C4DEB',
-  marker: '#7C4DEB',
+  highlightEdge: '#FFFFFF',
+  marker: '#FFFFFF',
+  markerEdge: '#1C1922',
+  dim: '#F7F5FB',
+  dimOpacity: 0.6,
 };
 
 export const PALETTES = { dark, light };
