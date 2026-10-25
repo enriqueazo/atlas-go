@@ -1,9 +1,10 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useNavigation } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { Animated, BackHandler, Pressable, ScrollView, Share, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CLOUD_READY } from '@/cloud/config';
 import { OptionCard, type OptionStatus } from '@/components/OptionCard';
 import { Flag } from '@/components/Flag';
 import { Silhouette } from '@/components/Silhouette';
@@ -28,6 +29,7 @@ import {
   type DailyScore,
 } from '@/game/daily';
 import { levelFor, MAX_LEVEL, nextQuestion, optionLabel, PER_LEVEL, pointsFor, type Question } from '@/game/engine';
+import { RANKED_ROUNDS, RANKED_SECONDS } from '@/game/leagues';
 import { loadSaved, useBoardProgress } from '@/game/progress';
 import { dayKey, trackAnswer, trackDaily, trackRun } from '@/game/stats';
 import { useCompleteGame } from '@/game/useCompleteGame';
@@ -42,7 +44,7 @@ type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
  * The quiz modes keep a record; Complete the map keeps its progress instead,
  * Complete a country keeps one per country, and the map of the day a streak.
  */
-type Play = Mode | 'complete' | 'country' | 'daily';
+type Play = Mode | 'complete' | 'country' | 'daily' | 'ranked';
 /** What the country list shows for each country: how far along, and the record. */
 type Summary = { filled: number; best: number | null };
 
@@ -153,6 +155,11 @@ export default function Game() {
   };
 
   const start = (m: Play) => {
+    if (m === 'ranked') {
+      play('tap');
+      router.push('/ranked');
+      return;
+    }
     play('zoom');
     scroll.current?.scrollTo({ y: 0, animated: false });
     if (m === 'complete') {
@@ -294,6 +301,18 @@ export default function Game() {
   const recordMode: Mode = isNeighbours ? 'neighbours' : (quiz ?? 'countries');
   const dayStreak = currentStreak(daily, day);
   const modes: { id: Play; icon: IconName; title: string; description: string; chip: string | null }[] = [
+    // Ranked is played online, so it shows once a Supabase project is set up.
+    ...(CLOUD_READY
+      ? [
+          {
+            id: 'ranked' as const,
+            icon: 'trophy-outline' as const,
+            title: t.modeRanked,
+            description: t.modeRankedDesc(RANKED_ROUNDS, RANKED_SECONDS),
+            chip: null,
+          },
+        ]
+      : []),
     {
       id: 'daily',
       icon: 'calendar-star',
@@ -562,7 +581,7 @@ export default function Game() {
                 <View style={styles.modeText}>
                   {m.chip && (
                     <View style={styles.chips}>
-                      <Chip label={m.chip} tone={m.id === 'complete' || m.id === 'country' || m.id === 'daily' ? 'purple' : 'green'} />
+                      <Chip label={m.chip} tone={m.id === 'complete' || m.id === 'country' || m.id === 'daily' || m.id === 'ranked' ? 'purple' : 'green'} />
                     </View>
                   )}
                   <Text style={styles.modeTitle}>{m.title}</Text>
