@@ -20,7 +20,7 @@ import {
   weekActivity,
   type Stats,
 } from '@/game/stats';
-import { COUNTRIES } from '@/game/world';
+import { COUNTRIES, SILHOUETTES } from '@/game/world';
 import { useSettings } from '@/settings';
 import { fonts, radius, space, themed, type Palette } from '@/theme';
 
@@ -87,6 +87,7 @@ function Content({ stats, filled, best, countries }: Data) {
   const today = stats.days[dayKey(now)];
   const overall = totals(stats);
   const pct = accuracy(overall);
+  const shapes = COUNTRIES.filter((c) => SILHOUETTES[c.iso]);
 
   return (
     <>
@@ -126,6 +127,11 @@ function Content({ stats, filled, best, countries }: Data) {
             count={knownByTier(stats.known.capitals, capitalCountries())}
             total={capitalCountries().length}
             label={t.capitalsKnown}
+          />
+          <Known
+            count={knownByTier(stats.known.silhouette, shapes)}
+            total={shapes.length}
+            label={t.silhouettesKnown}
           />
           <View style={styles.legend}>
             {tierColors(colors).map((color, i) => (
@@ -171,6 +177,20 @@ function Content({ stats, filled, best, countries }: Data) {
           value={`${records.capitals}`}
           unit={t.pointsUnit(stats.bestStreak.capitals)}
         />
+        <Record
+          icon="shape-outline"
+          title={t.modeSilhouette}
+          value={`${records.silhouette}`}
+          unit={t.pointsUnit(stats.bestStreak.silhouette)}
+        />
+        {stats.dailies.length > 0 && (
+          <Record
+            icon="calendar-star"
+            title={t.modeDaily}
+            value={`${stats.dailies[0].points}`}
+            unit={t.dailyUnit(stats.dailiesDone)}
+          />
+        )}
         {best !== null ? (
           <Record
             icon="map-check-outline"

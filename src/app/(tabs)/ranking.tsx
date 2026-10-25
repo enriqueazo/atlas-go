@@ -7,11 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Screen } from '@/components/ui';
 import { formatTime } from '@/game/complete';
 import { COUNTRY_MAPS } from '@/game/countries';
+import { DAILY_ROUNDS } from '@/game/daily';
 import { getStats, KEEP_RUNS, weekStart, type Stats } from '@/game/stats';
 import { useSettings, type Mode } from '@/settings';
 import { fonts, radius, space, themed } from '@/theme';
 
-type Board = Mode | 'complete' | 'country';
+type Board = Mode | 'complete' | 'country' | 'daily';
 type Period = 'week' | 'all';
 type RowData = { key: string; title: string; value: string; at: number };
 
@@ -49,6 +50,10 @@ export default function RankingTab() {
       ? mapRows(stats.maps)
       : board === 'country'
         ? mapRows(shownCountry ? stats.countryMaps[shownCountry.id] : [])
+      : board === 'daily'
+        ? stats.dailies
+            .filter((d) => d.at >= since)
+            .map((d) => ({ key: d.day, title: t.dailyTitle(d.correct, DAILY_ROUNDS), value: `${d.points}`, at: d.at }))
       : stats.runs[board]
           .filter((r) => r.at >= since)
           .map((r) => ({ key: `${r.id}`, title: t.runTitle(r.streak), value: `${r.points}`, at: r.at }));
@@ -56,6 +61,8 @@ export default function RankingTab() {
   const boards: { id: Board; label: string }[] = [
     { id: 'countries', label: t.modeCountries },
     { id: 'capitals', label: t.modeCapitals },
+    { id: 'silhouette', label: t.modeSilhouette },
+    { id: 'daily', label: t.modeDaily },
     { id: 'complete', label: t.modeComplete },
     { id: 'country', label: t.modeCountry },
   ];
@@ -140,7 +147,9 @@ export default function RankingTab() {
                     ? t.mapsNote(stats.mapsDone, KEEP_RUNS)
                     : board === 'country'
                       ? t.mapsNote(shownCountry ? (stats.countryMapsDone[shownCountry.id] ?? 0) : 0, KEEP_RUNS)
-                      : t.rankingNote(stats.runs[board].length, KEEP_RUNS)}
+                      : board === 'daily'
+                        ? t.dailiesNote(stats.dailiesDone, KEEP_RUNS)
+                        : t.rankingNote(stats.runs[board].length, KEEP_RUNS)}
                 </Text>
               </Card>
             )}
