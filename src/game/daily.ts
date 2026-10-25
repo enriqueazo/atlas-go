@@ -12,7 +12,7 @@ import { dayKey } from './stats';
 
 export const DAILY_ROUNDS = 10;
 /** The modes take turns, so every day has some of each. */
-const MODES: Mode[] = ['countries', 'silhouette', 'capitals'];
+const MODES: Mode[] = ['countries', 'flags', 'silhouette', 'capitals'];
 
 /** A small seeded generator (mulberry32), so a date always gives the same questions. */
 function seeded(seed: number): Random {

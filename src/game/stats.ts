@@ -59,9 +59,9 @@ export function emptyStats(): Stats {
   return {
     days: {},
     continents: tallies,
-    known: { countries: {}, capitals: {}, silhouette: {} },
-    bestStreak: { countries: 0, capitals: 0, silhouette: 0 },
-    runs: { countries: [], capitals: [], silhouette: [] },
+    known: { countries: {}, capitals: {}, silhouette: {}, flags: {} },
+    bestStreak: { countries: 0, capitals: 0, silhouette: 0, flags: 0 },
+    runs: { countries: [], capitals: [], silhouette: [], flags: [] },
     maps: [],
     mapsDone: 0,
     regions: { answers: 0, correct: 0 },

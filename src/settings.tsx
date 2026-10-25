@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 import { deviceLang, strings, type Lang, type Strings } from '@/i18n';
 
-export type Mode = 'countries' | 'capitals' | 'silhouette';
+export type Mode = 'countries' | 'capitals' | 'silhouette' | 'flags';
 export type Volume = 'off' | 'low' | 'medium' | 'high';
 
 // The appearance lives in the theme (see theme.tsx), like in Vocablo.
@@ -16,7 +16,7 @@ type Stored = {
 const DEFAULTS: Stored = {
   sound: 'medium',
   lang: 'system',
-  records: { countries: 0, capitals: 0, silhouette: 0 },
+  records: { countries: 0, capitals: 0, silhouette: 0, flags: 0 },
 };
 
 const KEY = 'atlas-go/settings/v1';

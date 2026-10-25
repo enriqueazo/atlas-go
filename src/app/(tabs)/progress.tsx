@@ -133,6 +133,7 @@ function Content({ stats, filled, best, countries }: Data) {
             total={shapes.length}
             label={t.silhouettesKnown}
           />
+          <Known count={knownByTier(stats.known.flags, COUNTRIES)} total={COUNTRIES.length} label={t.flagsKnown} />
           <View style={styles.legend}>
             {tierColors(colors).map((color, i) => (
               <View key={i} style={styles.legendItem}>
@@ -182,6 +183,12 @@ function Content({ stats, filled, best, countries }: Data) {
           title={t.modeSilhouette}
           value={`${records.silhouette}`}
           unit={t.pointsUnit(stats.bestStreak.silhouette)}
+        />
+        <Record
+          icon="flag-variant-outline"
+          title={t.modeFlags}
+          value={`${records.flags}`}
+          unit={t.pointsUnit(stats.bestStreak.flags)}
         />
         {stats.dailies.length > 0 && (
           <Record
