@@ -163,19 +163,27 @@ export function tapAt(
   const own = hits.find((h) => h.iso === target.iso);
   if ((own && inside(own, x, y)) || near(target, TARGET_HIT)) return { kind: 'right' };
 
+  const iso = placeAt(board, x, y, px);
+  if (iso) return { kind: 'wrong', iso };
+  // On a country's map, the land around it is outside the game.
+  if (board.country && outsideFor(board).some((h) => inside(h, x, y))) return { kind: 'outside' };
+  return { kind: 'sea' };
+}
+
+/** The place under a tap at map point (x, y), or null at sea. `px` is map units per screen pixel. */
+export function placeAt(board: Board, x: number, y: number, px: number): string | null {
+  if (board.wraps) {
+    x = ((x % board.width) + board.width) % board.width;
+    y = ((y % board.height) + board.height) % board.height;
+  }
   // Tiny places first: their ring sits on top of whatever is under them.
   let ring: Place | null = null;
   let best = Infinity;
   for (const r of board.regions) {
-    if (!r.tiny || !near(r, RING_HIT)) continue;
+    if (!r.tiny || !isSmall(r, px)) continue;
     const d = distance(board, x, y, r.center[0], r.center[1]);
-    if (d < best) [ring, best] = [r, d];
+    if (d <= RING_HIT * px && d < best) [ring, best] = [r, d];
   }
-  if (ring) return { kind: 'wrong', iso: ring.iso };
-
-  const hit = hits.find((h) => inside(h, x, y));
-  if (hit) return { kind: 'wrong', iso: hit.iso };
-  // On a country's map, the land around it is outside the game.
-  if (board.country && outsideFor(board).some((h) => inside(h, x, y))) return { kind: 'outside' };
-  return { kind: 'sea' };
+  if (ring) return ring.iso;
+  return hitsFor(board).find((h) => inside(h, x, y))?.iso ?? null;
 }

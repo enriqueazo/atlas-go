@@ -31,6 +31,8 @@ import { levelFor, MAX_LEVEL, nextQuestion, optionLabel, PER_LEVEL, pointsFor, t
 import { loadSaved, useBoardProgress } from '@/game/progress';
 import { dayKey, trackAnswer, trackDaily, trackRun } from '@/game/stats';
 import { useCompleteGame } from '@/game/useCompleteGame';
+import { LIVES, useNeighboursGame } from '@/game/useNeighboursGame';
+import { BY_ISO } from '@/game/world';
 import { useSettings, type Mode } from '@/settings';
 import { useSound } from '@/sounds';
 import { fonts, radius, space, themed } from '@/theme';
@@ -78,6 +80,7 @@ export default function Game() {
   // A country was picked; the game starts once its progress has loaded.
   const [starting, setStarting] = useState(false);
   const [summaries, setSummaries] = useState<Record<string, Summary>>({});
+  const neighbours = useNeighboursGame(play);
   // Map of the day: the saved picks and streak, and the day being played, so
   // a game that runs past midnight stays on its day.
   const [daily, setDaily] = useState<DailyRecord>(EMPTY_DAILY);
@@ -92,7 +95,8 @@ export default function Game() {
   const quiz =
     mode === 'countries' || mode === 'capitals' || mode === 'silhouette' || mode === 'flags' ? mode : null;
   const isDaily = mode === 'daily';
-  const playing = painting || picking || isDaily || (quiz !== null && question !== null);
+  const isNeighbours = mode === 'neighbours';
+  const playing = painting || picking || isDaily || isNeighbours || (quiz !== null && question !== null);
   const dayPicks = picksFor(daily, day);
 
   // The map of the day's progress, for the lobby card.
@@ -159,6 +163,11 @@ export default function Game() {
     if (m === 'country') {
       setMode(m);
       setCountry(null);
+      return;
+    }
+    if (m === 'neighbours') {
+      setMode(m);
+      neighbours.start();
       return;
     }
     if (m === 'daily') {
@@ -281,6 +290,8 @@ export default function Game() {
   // A silhouette or a flag hides the map until it is answered, then the map shows where it is.
   const cover = (question?.mode === 'silhouette' || question?.mode === 'flags') && !answered ? question : null;
   const today = scoreDay(day, dayPicks);
+  const shownPoints = isNeighbours ? neighbours.points : points;
+  const recordMode: Mode = isNeighbours ? 'neighbours' : (quiz ?? 'countries');
   const dayStreak = currentStreak(daily, day);
   const modes: { id: Play; icon: IconName; title: string; description: string; chip: string | null }[] = [
     {
@@ -327,6 +338,13 @@ export default function Game() {
       title: t.modeFlags,
       description: t.modeFlagsDesc,
       chip: records.flags > 0 ? t.recordLabel(records.flags) : null,
+    },
+    {
+      id: 'neighbours',
+      icon: 'map-marker-path',
+      title: t.modeNeighbours,
+      description: t.modeNeighboursDesc(LIVES),
+      chip: records.neighbours > 0 ? t.recordLabel(records.neighbours) : null,
     },
     {
       id: 'complete',
@@ -416,12 +434,12 @@ export default function Game() {
             <Pressable accessibilityRole="button" accessibilityLabel={t.close} onPress={quit} hitSlop={12}>
               <Text style={styles.close}>✕</Text>
             </Pressable>
-            <View style={styles.streak} accessibilityLabel={t.recordLabel(Math.max(records[quiz ?? 'countries'], points))}>
+            <View style={styles.streak} accessibilityLabel={t.recordLabel(Math.max(records[recordMode], shownPoints))}>
               <MaterialCommunityIcons name="trophy-outline" size={20} color={colors.purpleSoft} />
-              <Text style={styles.streakText}>{t.recordLabel(Math.max(records[quiz ?? 'countries'], points))}</Text>
+              <Text style={styles.streakText}>{t.recordLabel(Math.max(records[recordMode], shownPoints))}</Text>
             </View>
-            <Text style={styles.score} accessibilityLabel={`${t.points}: ${points}`}>
-              {points}
+            <Text style={styles.score} accessibilityLabel={`${t.points}: ${shownPoints}`}>
+              {shownPoints}
             </Text>
           </View>
         ) : (
@@ -448,6 +466,15 @@ export default function Game() {
               status="ask"
               paint={{ filled: boardProgress.filled, flash: game.flash }}
               onTap={game.tap}
+              onGesture={setOnMap}
+            />
+          ) : isNeighbours ? (
+            <WorldMap
+              focus={neighbours.target}
+              mode="countries"
+              status="ask"
+              marks={{ marks: neighbours.marks, flash: neighbours.flash }}
+              onTap={neighbours.tap}
               onGesture={setOnMap}
             />
           ) : (
@@ -480,6 +507,8 @@ export default function Game() {
             misses={boardProgress.misses}
             best={boardProgress.best}
           />
+        ) : isNeighbours ? (
+          <NeighboursPanel game={neighbours} />
         ) : isDaily && !question ? (
           <DailyPanel day={day} score={today} streak={dayStreak} />
         ) : playing && question ? (
@@ -698,6 +727,78 @@ function CountryList({
   );
 }
 
+/** Neighbours: the country, what the last tap was, borders found and lives; then the verdict. */
+function NeighboursPanel({ game }: { game: ReturnType<typeof useNeighboursGame> }) {
+  const { colors, styles } = useThemed();
+  const { t, language } = useSettings();
+  const { target, note } = game;
+  if (!target) return <View style={styles.panel} />;
+  const name = (iso: string) => BY_ISO.get(iso)?.[language] ?? iso;
+
+  let noteText = t.nbHint;
+  let noteColor = colors.textMuted;
+  if (note?.kind === 'found') [noteText, noteColor] = [t.nbFound(name(note.iso)), colors.green];
+  else if (note?.kind === 'wrong') [noteText, noteColor] = [t.nbWrong(name(note.iso)), colors.wrong];
+  else if (note?.kind === 'self') noteText = t.nbSelf;
+  else if (note?.kind === 'again') noteText = t.nbAgain(name(note.iso));
+  else if (note?.kind === 'sea') noteText = t.sea;
+  const missed = game.borders.length - game.found.length;
+
+  return (
+    <View style={styles.panel}>
+      <View>
+        <Text style={styles.prompt}>{t.askNeighbours}</Text>
+        <Text style={styles.target} numberOfLines={1} adjustsFontSizeToFit>
+          {target[language]}
+        </Text>
+        {!game.revealed && (
+          <Text style={[styles.note, { color: noteColor }]} numberOfLines={2}>
+            {noteText}
+          </Text>
+        )}
+      </View>
+      {game.revealed ? (
+        <View style={styles.footer}>
+          <View>
+            <Text style={[styles.verdict, { color: game.complete ? colors.green : colors.wrong }]}>
+              {game.over ? t.nbOver : game.isRecord ? t.newRecord : game.complete ? t.nbComplete : t.nbMissed(missed)}
+            </Text>
+            <Text style={styles.answer}>
+              {game.over ? t.nbOverStats(game.points, game.done) : t.bordersFound(game.found.length, game.borders.length)}
+            </Text>
+          </View>
+          <Button label={game.over ? t.playAgain : t.next} onPress={game.next} />
+        </View>
+      ) : (
+        <View style={styles.levelCard}>
+          <View style={styles.levelRow}>
+            <Text style={styles.levelText}>{t.bordersFound(game.found.length, game.borders.length)}</Text>
+            <View style={styles.hearts} accessibilityLabel={t.livesLabel(game.lives)}>
+              {Array.from({ length: LIVES }, (_, i) => (
+                <MaterialCommunityIcons
+                  key={i}
+                  name={i < game.lives ? 'heart' : 'heart-outline'}
+                  size={20}
+                  color={colors.wrong}
+                />
+              ))}
+            </View>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${(game.found.length / game.borders.length) * 100}%` }]} />
+          </View>
+          <View style={styles.levelRow}>
+            <Text style={styles.levelNote}>{t.level(levelFor(game.done))}</Text>
+            <Pressable accessibilityRole="button" onPress={game.giveUp} hitSlop={12}>
+              <Text style={styles.skip}>{t.giveUp}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
 /** The map of the day, once done: the score, a square per question, the streak and Share. */
 function DailyPanel({ day, score, streak }: { day: string; score: DailyScore; streak: number }) {
   const { colors, styles } = useThemed();
@@ -866,6 +967,7 @@ const useThemed = themed((colors) => ({
     },
     squares: { flexDirection: 'row', justifyContent: 'center', gap: space(1) },
     square: { width: 22, height: 22, borderRadius: 6 },
+    hearts: { flexDirection: 'row', gap: space(1) },
     streakRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space(2) },
     panel: { paddingTop: space(5), paddingBottom: space(5), gap: space(3) },
     section: { color: colors.textMuted, fontFamily: fonts.bold, fontSize: 15, marginBottom: space(1) },

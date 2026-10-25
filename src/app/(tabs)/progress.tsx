@@ -20,6 +20,7 @@ import {
   weekActivity,
   type Stats,
 } from '@/game/stats';
+import { BORDERED } from '@/game/useNeighboursGame';
 import { COUNTRIES, SILHOUETTES } from '@/game/world';
 import { useSettings } from '@/settings';
 import { fonts, radius, space, themed, type Palette } from '@/theme';
@@ -134,6 +135,11 @@ function Content({ stats, filled, best, countries }: Data) {
             label={t.silhouettesKnown}
           />
           <Known count={knownByTier(stats.known.flags, COUNTRIES)} total={COUNTRIES.length} label={t.flagsKnown} />
+          <Known
+            count={knownByTier(stats.known.neighbours, BORDERED)}
+            total={BORDERED.length}
+            label={t.neighboursKnown}
+          />
           <View style={styles.legend}>
             {tierColors(colors).map((color, i) => (
               <View key={i} style={styles.legendItem}>
@@ -189,6 +195,12 @@ function Content({ stats, filled, best, countries }: Data) {
           title={t.modeFlags}
           value={`${records.flags}`}
           unit={t.pointsUnit(stats.bestStreak.flags)}
+        />
+        <Record
+          icon="map-marker-path"
+          title={t.modeNeighbours}
+          value={`${records.neighbours}`}
+          unit={t.countriesUnit(stats.bestStreak.neighbours)}
         />
         {stats.dailies.length > 0 && (
           <Record

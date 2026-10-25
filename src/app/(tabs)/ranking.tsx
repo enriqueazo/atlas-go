@@ -56,13 +56,19 @@ export default function RankingTab() {
             .map((d) => ({ key: d.day, title: t.dailyTitle(d.correct, DAILY_ROUNDS), value: `${d.points}`, at: d.at }))
       : stats.runs[board]
           .filter((r) => r.at >= since)
-          .map((r) => ({ key: `${r.id}`, title: t.runTitle(r.streak), value: `${r.points}`, at: r.at }));
+          .map((r) => ({
+            key: `${r.id}`,
+            title: board === 'neighbours' ? t.neighboursRunTitle(r.streak) : t.runTitle(r.streak),
+            value: `${r.points}`,
+            at: r.at,
+          }));
   const latest = Math.max(0, ...rows.map((r) => r.at));
   const boards: { id: Board; label: string }[] = [
     { id: 'countries', label: t.modeCountries },
     { id: 'capitals', label: t.modeCapitals },
     { id: 'silhouette', label: t.modeSilhouette },
     { id: 'flags', label: t.modeFlags },
+    { id: 'neighbours', label: t.modeNeighbours },
     { id: 'daily', label: t.modeDaily },
     { id: 'complete', label: t.modeComplete },
     { id: 'country', label: t.modeCountry },
