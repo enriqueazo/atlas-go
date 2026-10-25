@@ -21,6 +21,8 @@ type Frame = { x: number; y: number; w: number; h: number };
 export type MapStatus = 'ask' | 'right' | 'wrong';
 /** A country that just got painted, or was tapped by mistake. */
 export type Flash = { iso: string; kind: 'right' | 'wrong'; at: number };
+/** Neighbours: a border found, or one shown after giving up. */
+export type Mark = { iso: string; kind: 'found' | 'missed' };
 
 type Props = {
   /** The map to draw; the world unless a country's map is being completed. */
@@ -34,6 +36,11 @@ type Props = {
    * stays where the player leaves it.
    */
   paint?: { filled: ReadonlySet<string>; flash: Flash | null };
+  /**
+   * Neighbours: countries marked around the asked one, the last tap's flash,
+   * and rings on the tiny countries so they can be tapped.
+   */
+  marks?: { marks: Mark[]; flash: Flash | null };
   /** A tap (not a drag) at map point (x, y); `px` is map units per screen pixel. */
   onTap?: (x: number, y: number, px: number) => void;
   /** A finger is dragging or pinching the map, so a scroll view around it should hold still. */
@@ -129,7 +136,7 @@ function extrasFor(b: Board) {
   return e;
 }
 
-export function WorldMap({ board = WORLD_BOARD, focus, mode, status, paint, onTap, onGesture }: Props) {
+export function WorldMap({ board = WORLD_BOARD, focus, mode, status, paint, marks, onTap, onGesture }: Props) {
   const c = useColors();
   const { t } = useSettings();
   // Whether the player has dragged or zoomed away from where the game put
@@ -367,7 +374,7 @@ export function WorldMap({ board = WORLD_BOARD, focus, mode, status, paint, onTa
   }, [asking]);
 
   // A painted or mistaken country lights up and fades.
-  const flash = paint?.flash ?? null;
+  const flash = paint?.flash ?? marks?.flash ?? null;
   const [, setFlashTick] = useState(0);
   useEffect(() => {
     if (!flash) return;
@@ -385,6 +392,15 @@ export function WorldMap({ board = WORLD_BOARD, focus, mode, status, paint, onTa
     [flash, board],
   );
   const { colorOf, tiny } = extrasFor(board);
+  const marked = useMemo(
+    () =>
+      (marks?.marks ?? []).flatMap((m) => {
+        const l = board.shapes.find((s) => s.iso === m.iso);
+        const place = board.regions.find((r) => r.iso === m.iso);
+        return l && place ? [{ ...m, d: l.d, place }] : [];
+      }),
+    [marks?.marks, board],
+  );
 
   // Map units per screen pixel, so strokes and markers keep their size.
   const px = frame && size ? frame.w / size.w : 1;
@@ -476,6 +492,43 @@ export function WorldMap({ board = WORLD_BOARD, focus, mode, status, paint, onTa
                       />
                     );
                   })}
+                {marks &&
+                  tiny.map((t) => (
+                    <Circle
+                      key={t.iso}
+                      cx={t.center[0]}
+                      cy={t.center[1]}
+                      r={5 * px}
+                      fill={c.land[colorOf.get(t.iso) ?? 0]}
+                      stroke={c.landStroke}
+                      strokeWidth={1.5 * px}
+                    />
+                  ))}
+                {marked.map((m) => {
+                  const color = m.kind === 'found' ? c.green : c.wrong;
+                  return (
+                    <G key={m.iso} strokeLinejoin="round">
+                      <Path
+                        d={m.d}
+                        fill={color}
+                        fillOpacity={m.kind === 'found' ? 0.9 : 0.45}
+                        stroke={m.kind === 'found' ? c.highlightEdge : color}
+                        strokeWidth={2 * px}
+                        strokeDasharray={m.kind === 'missed' ? `${5 * px} ${3 * px}` : undefined}
+                      />
+                      {m.place.tiny && (
+                        <Circle
+                          cx={m.place.center[0]}
+                          cy={m.place.center[1]}
+                          r={7 * px}
+                          fill={color}
+                          stroke={c.highlightEdge}
+                          strokeWidth={2 * px}
+                        />
+                      )}
+                    </G>
+                  );
+                })}
                 {flashShape && flashLeft > 0 && (
                   <G strokeLinejoin="round">
                     <Path
