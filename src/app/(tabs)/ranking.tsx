@@ -1,4 +1,3 @@
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -227,20 +226,8 @@ const useThemed = themed((colors) => ({
       padding: space(5),
       gap: space(4),
     },
-    row: { flexDirection: 'row', alignItems: 'center', gap: space(3) },
-    big: { color: colors.text, fontFamily: fonts.heavy, fontSize: 20 },
     muted: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22 },
     note: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-    tierIcon: {
-      width: 52,
-      height: 52,
-      borderRadius: 18,
-      borderWidth: 2,
-      borderColor: colors.purpleSoft,
-      backgroundColor: colors.surfaceRaised,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     table: { gap: space(1) },
     tableRow: {
       flexDirection: 'row',
