@@ -5,15 +5,16 @@ import neighbours from '@/data/neighbours.json';
 import type { Cue } from '@/sounds';
 import { useSettings } from '@/settings';
 
-import { placeAt, WORLD_BOARD } from './complete';
 import { levelFor } from './engine';
 import { trackAnswer, trackRun } from './stats';
 import { BY_ISO, type Country } from './world';
 
-// Neighbours: a country lights up and the player taps every country it shares
-// a land border with (scripts/build-neighbours.mjs). Each one found scores;
-// a wrong tap or giving up costs a life, and the run ends with the last one.
-// Levels climb with the countries completed, as in the quiz modes.
+// Neighbours: a country lights up, with the shapes of the countries around it
+// left blank, and the player names every country it shares a land border
+// with (scripts/build-neighbours.mjs), picking from a list that mixes them
+// with nearby countries that don't border it. Each one named scores; a wrong
+// name or giving up costs a life, and the run ends with the last one. Levels
+// climb with the countries completed, as in the quiz modes.
 
 const NEIGHBOURS = neighbours as Record<string, string[]>;
 export const LIVES = 3;
@@ -41,18 +42,41 @@ export function nextTarget(done: number, recent: string[]): Country {
   return pool[pool.length - 1];
 }
 
-/** What the last tap said, shown under the country. */
-export type NeighbourNote =
-  | { kind: 'found'; iso: string }
-  | { kind: 'wrong'; iso: string }
-  | { kind: 'self' }
-  | { kind: 'again'; iso: string }
-  | { kind: 'sea' };
+/**
+ * Names that don't border the country, to mix in: countries next to its
+ * neighbours first, then the rest of its region. More of them as the level
+ * climbs.
+ */
+export function decoysFor(target: Country, level: number): string[] {
+  const borders = new Set(NEIGHBOURS[target.iso]);
+  const taken = (iso: string) => iso === target.iso || borders.has(iso);
+  const around = [...new Set([...borders].flatMap((iso) => NEIGHBOURS[iso] ?? []))].filter((iso) => !taken(iso));
+  const region = BORDERED.filter((c) => c.region === target.region && !taken(c.iso) && !around.includes(c.iso)).map(
+    (c) => c.iso,
+  );
+  const want = Math.min(8, 2 + level);
+  return [...shuffle(around), ...shuffle(region)].slice(0, want);
+}
+
+function shuffle<T>(items: T[]) {
+  const a = [...items];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/** What the last name picked was, shown under the country. */
+export type NeighbourNote = { kind: 'found'; iso: string } | { kind: 'wrong'; iso: string };
 
 export function useNeighboursGame(play: (cue: Cue) => void) {
   const { records, saveRecord } = useSettings();
   const [target, setTarget] = useState<Country | null>(null);
+  // The names to pick from: the borders and the decoys, in a fixed order.
+  const [options, setOptions] = useState<string[]>([]);
   const [found, setFound] = useState<string[]>([]);
+  const [wrong, setWrong] = useState<string[]>([]);
   const [lives, setLives] = useState(LIVES);
   const [points, setPoints] = useState(0);
   // Countries completed this run, which sets the level.
@@ -62,8 +86,6 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
   const [note, setNote] = useState<NeighbourNote | null>(null);
   const [flash, setFlash] = useState<Flash | null>(null);
   const [isRecord, setIsRecord] = useState(false);
-  // Wrong taps this round: a round with none counts the country as known.
-  const misses = useRef(0);
   const recent = useRef<string[]>([]);
   const runId = useRef(0);
   const celebrated = useRef(false);
@@ -76,11 +98,12 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
     const t = nextTarget(n, recent.current);
     recent.current = [...recent.current.slice(-40), t.iso];
     setTarget(t);
+    setOptions(shuffle([...NEIGHBOURS[t.iso], ...decoysFor(t, levelFor(n))]));
     setFound([]);
+    setWrong([]);
     setRevealed(false);
     setNote(null);
     setFlash(null);
-    misses.current = 0;
   };
 
   const start = () => {
@@ -94,10 +117,10 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
     ask(0);
   };
 
-  /** Ends the round; `lost` when given up or out of lives. */
+  /** Ends the round; `lost` when given up or out of lives. A round with no wrong name counts the country as known. */
   const finish = (lost: boolean, total: number, n: number) => {
     setRevealed(true);
-    trackAnswer({ mode: 'neighbours', iso: target!.iso, correct: !lost && misses.current === 0 });
+    trackAnswer({ mode: 'neighbours', iso: target!.iso, correct: !lost && wrong.length === 0 });
     trackRun('neighbours', { id: runId.current, points: total, streak: n, at: Date.now() });
   };
 
@@ -108,12 +131,8 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
     return left;
   };
 
-  const tap = (x: number, y: number, px: number) => {
-    if (!target || revealed || over) return;
-    const iso = placeAt(WORLD_BOARD, x, y, px);
-    if (!iso) return setNote({ kind: 'sea' });
-    if (iso === target.iso) return setNote({ kind: 'self' });
-    if (found.includes(iso)) return setNote({ kind: 'again', iso });
+  const name = (iso: string) => {
+    if (!target || revealed || over || found.includes(iso) || wrong.includes(iso)) return;
     const now = Date.now();
     if (borders.includes(iso)) {
       const total = points + pointsFor(target);
@@ -138,7 +157,8 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
         trackRun('neighbours', { id: runId.current, points: total, streak: done, at: now });
       }
     } else {
-      misses.current += 1;
+      // The wrong country flashes on the map, so the player learns where it is.
+      setWrong([...wrong, iso]);
       setFlash({ iso, kind: 'wrong', at: now });
       setNote({ kind: 'wrong', iso });
       play('wrong');
@@ -160,17 +180,18 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
     else ask(done);
   };
 
-  const marks: Mark[] = target
-    ? [
-        ...found.map((iso) => ({ iso, kind: 'found' as const })),
-        ...(revealed ? borders.filter((iso) => !found.includes(iso)).map((iso) => ({ iso, kind: 'missed' as const })) : []),
-      ]
-    : [];
+  // Borders still to name are blank shapes; after the round, the missed ones are pink.
+  const marks: Mark[] = borders.map((iso) => ({
+    iso,
+    kind: found.includes(iso) ? 'found' : revealed ? 'missed' : 'pending',
+  }));
 
   return {
     target,
     borders,
+    options,
     found,
+    wrong,
     lives,
     points,
     done,
@@ -182,7 +203,7 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
     marks,
     isRecord,
     start,
-    tap,
+    name,
     giveUp,
     next,
   };

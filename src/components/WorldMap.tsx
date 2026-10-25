@@ -21,8 +21,8 @@ type Frame = { x: number; y: number; w: number; h: number };
 export type MapStatus = 'ask' | 'right' | 'wrong';
 /** A country that just got painted, or was tapped by mistake. */
 export type Flash = { iso: string; kind: 'right' | 'wrong'; at: number };
-/** Neighbours: a border found, or one shown after giving up. */
-export type Mark = { iso: string; kind: 'found' | 'missed' };
+/** Neighbours: a border still to name, one named, or one shown after giving up. */
+export type Mark = { iso: string; kind: 'pending' | 'found' | 'missed' };
 
 type Props = {
   /** The map to draw; the world unless a country's map is being completed. */
@@ -37,8 +37,8 @@ type Props = {
    */
   paint?: { filled: ReadonlySet<string>; flash: Flash | null };
   /**
-   * Neighbours: countries marked around the asked one, the last tap's flash,
-   * and rings on the tiny countries so they can be tapped.
+   * Neighbours: countries marked around the asked one, the last name's
+   * flash, and rings on the tiny countries so they can be seen.
    */
   marks?: { marks: Mark[]; flash: Flash | null };
   /** A tap (not a drag) at map point (x, y); `px` is map units per screen pixel. */
@@ -505,16 +505,16 @@ export function WorldMap({ board = WORLD_BOARD, focus, mode, status, paint, mark
                     />
                   ))}
                 {marked.map((m) => {
-                  const color = m.kind === 'found' ? c.green : c.wrong;
+                  const color = m.kind === 'found' ? c.green : m.kind === 'missed' ? c.wrong : c.blank;
                   return (
                     <G key={m.iso} strokeLinejoin="round">
                       <Path
                         d={m.d}
                         fill={color}
-                        fillOpacity={m.kind === 'found' ? 0.9 : 0.45}
-                        stroke={m.kind === 'found' ? c.highlightEdge : color}
+                        fillOpacity={m.kind === 'missed' ? 0.45 : 0.9}
+                        stroke={m.kind === 'found' ? c.highlightEdge : m.kind === 'missed' ? color : c.highlight}
                         strokeWidth={2 * px}
-                        strokeDasharray={m.kind === 'missed' ? `${5 * px} ${3 * px}` : undefined}
+                        strokeDasharray={m.kind === 'found' ? undefined : `${5 * px} ${3 * px}`}
                       />
                       {m.place.tiny && (
                         <Circle

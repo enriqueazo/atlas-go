@@ -474,7 +474,6 @@ export default function Game() {
               mode="countries"
               status="ask"
               marks={{ marks: neighbours.marks, flash: neighbours.flash }}
-              onTap={neighbours.tap}
               onGesture={setOnMap}
             />
           ) : (
@@ -727,7 +726,7 @@ function CountryList({
   );
 }
 
-/** Neighbours: the country, what the last tap was, borders found and lives; then the verdict. */
+/** Neighbours: the country, the names to pick from, borders found and lives; then the verdict. */
 function NeighboursPanel({ game }: { game: ReturnType<typeof useNeighboursGame> }) {
   const { colors, styles } = useThemed();
   const { t, language } = useSettings();
@@ -739,9 +738,6 @@ function NeighboursPanel({ game }: { game: ReturnType<typeof useNeighboursGame> 
   let noteColor = colors.textMuted;
   if (note?.kind === 'found') [noteText, noteColor] = [t.nbFound(name(note.iso)), colors.green];
   else if (note?.kind === 'wrong') [noteText, noteColor] = [t.nbWrong(name(note.iso)), colors.wrong];
-  else if (note?.kind === 'self') noteText = t.nbSelf;
-  else if (note?.kind === 'again') noteText = t.nbAgain(name(note.iso));
-  else if (note?.kind === 'sea') noteText = t.sea;
   const missed = game.borders.length - game.found.length;
 
   return (
@@ -756,6 +752,33 @@ function NeighboursPanel({ game }: { game: ReturnType<typeof useNeighboursGame> 
             {noteText}
           </Text>
         )}
+      </View>
+      <View style={styles.names}>
+        {[...game.options]
+          .sort((a, b) => name(a).localeCompare(name(b), language))
+          .map((iso) => {
+            const isFound = game.found.includes(iso);
+            const isWrong = game.wrong.includes(iso);
+            const isMissed = game.revealed && !isFound && game.borders.includes(iso);
+            const tone = isFound ? colors.green : isWrong || isMissed ? colors.wrong : null;
+            return (
+              <Pressable
+                key={iso}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: game.revealed || isFound || isWrong }}
+                onPress={() => game.name(iso)}
+                style={({ pressed }) => [
+                  styles.name,
+                  tone && { borderColor: tone, backgroundColor: isFound ? colors.greenSoft : colors.wrongSoft },
+                  isMissed && { borderStyle: 'dashed', backgroundColor: colors.surface },
+                  game.revealed && !tone && { opacity: 0.45 },
+                  pressed && { transform: [{ scale: 0.96 }] },
+                ]}
+              >
+                <Text style={[styles.nameText, tone && { color: tone }]}>{name(iso)}</Text>
+              </Pressable>
+            );
+          })}
       </View>
       {game.revealed ? (
         <View style={styles.footer}>
@@ -968,6 +991,16 @@ const useThemed = themed((colors) => ({
     squares: { flexDirection: 'row', justifyContent: 'center', gap: space(1) },
     square: { width: 22, height: 22, borderRadius: 6 },
     hearts: { flexDirection: 'row', gap: space(1) },
+    names: { flexDirection: 'row', flexWrap: 'wrap', gap: space(2) },
+    name: {
+      paddingVertical: space(2),
+      paddingHorizontal: space(4),
+      borderRadius: radius.pill,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    nameText: { color: colors.text, fontFamily: fonts.bold, fontSize: 15 },
     streakRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space(2) },
     panel: { paddingTop: space(5), paddingBottom: space(5), gap: space(3) },
     section: { color: colors.textMuted, fontFamily: fonts.bold, fontSize: 15, marginBottom: space(1) },
