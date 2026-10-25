@@ -43,6 +43,8 @@ const dark = {
   /** Map: countries not painted yet in Complete the map, and the ring around tiny ones. */
   blank: '#353042',
   blankRing: '#A39DB0',
+  /** Map: the countries around a country being completed, outside the game. */
+  outside: '#242338',
 };
 
 export type Palette = typeof dark;
@@ -77,6 +79,7 @@ const light: Palette = {
   dimOpacity: 0.6,
   blank: '#E6E1EF',
   blankRing: '#6B6478',
+  outside: '#F7F6FA',
 };
 
 export const PALETTES = { dark, light };

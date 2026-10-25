@@ -15,42 +15,53 @@ type Saved = {
 };
 
 const EMPTY: Saved = { filled: [], misses: 0, ms: 0, best: null };
-const key = (board: Board) => `atlas-go/complete/${board.id}/v1`;
+const key = (id: string) => `atlas-go/complete/${id}/v1`;
 
-/** A board's saved progress; the Progress tab reads it too. */
-export async function loadBoard(board: Board): Promise<Saved> {
+/**
+ * A board's saved progress by its id, without loading the board's map: the
+ * country list and the Progress tab read it for every country.
+ */
+export async function loadSaved(id: string): Promise<Saved> {
   try {
-    const raw = await AsyncStorage.getItem(key(board));
+    const raw = await AsyncStorage.getItem(key(id));
     if (!raw) return EMPTY;
     const s = JSON.parse(raw) as Partial<Saved>;
-    // Drop places the board no longer has, in case the map data changes.
-    const known = new Set(board.regions.map((r) => r.iso));
-    return {
-      filled: (s.filled ?? []).filter((iso) => known.has(iso)),
-      misses: s.misses ?? 0,
-      ms: s.ms ?? 0,
-      best: s.best ?? null,
-    };
+    return { filled: s.filled ?? [], misses: s.misses ?? 0, ms: s.ms ?? 0, best: s.best ?? null };
   } catch {
     return EMPTY;
   }
 }
 
+/** A board's saved progress; the Progress tab reads it too. */
+export async function loadBoard(board: Board): Promise<Saved> {
+  const s = await loadSaved(board.id);
+  // Drop places the board no longer has, in case the map data changes.
+  const known = new Set(board.regions.map((r) => r.iso));
+  return { ...s, filled: s.filled.filter((iso) => known.has(iso)) };
+}
+
 /** How far the player got filling in a board, saved on the device. */
 export function useBoardProgress(board: Board) {
   const [saved, setSaved] = useState<Saved>(EMPTY);
-  const [ready, setReady] = useState(false);
+  // The board whose progress is loaded; until it is this one, nothing is
+  // saved, so switching boards never writes one's progress over another's.
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const ready = loaded === board.id;
 
   useEffect(() => {
-    setReady(false);
+    let live = true;
+    setLoaded(null);
     setSaved(EMPTY);
     loadBoard(board)
-      .then(setSaved)
-      .finally(() => setReady(true));
+      .then((s) => live && setSaved(s))
+      .finally(() => live && setLoaded(board.id));
+    return () => {
+      live = false;
+    };
   }, [board]);
 
   useEffect(() => {
-    if (ready) AsyncStorage.setItem(key(board), JSON.stringify(saved)).catch(() => {});
+    if (ready) AsyncStorage.setItem(key(board.id), JSON.stringify(saved)).catch(() => {});
   }, [saved, ready, board]);
 
   const fill = useCallback((iso: string) => {

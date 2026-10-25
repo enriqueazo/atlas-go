@@ -6,7 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Screen } from '@/components/ui';
 import { formatTime, WORLD_BOARD } from '@/game/complete';
-import { loadBoard } from '@/game/progress';
+import { COUNTRY_MAPS } from '@/game/countries';
+import { loadBoard, loadSaved } from '@/game/progress';
 import {
   accuracy,
   capitalCountries,
@@ -23,7 +24,9 @@ import { COUNTRIES } from '@/game/world';
 import { useSettings } from '@/settings';
 import { fonts, radius, space, themed, type Palette } from '@/theme';
 
-type Data = { stats: Stats; filled: number; best: number | null };
+type Saved = { filled: number; best: number | null };
+/** The world map's progress, and each country's map by board id. */
+type Data = { stats: Stats; filled: number; best: number | null; countries: Record<string, Saved> };
 type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 /**
@@ -41,8 +44,16 @@ export default function Progress() {
   const [data, setData] = useState<Data | null>(null);
   useFocusEffect(
     useCallback(() => {
-      Promise.all([getStats(), loadBoard(WORLD_BOARD)]).then(([stats, board]) =>
-        setData({ stats, filled: board.filled.length, best: board.best }),
+      Promise.all([getStats(), loadBoard(WORLD_BOARD), Promise.all(COUNTRY_MAPS.map((m) => loadSaved(m.id)))]).then(
+        ([stats, board, countries]) =>
+          setData({
+            stats,
+            filled: board.filled.length,
+            best: board.best,
+            countries: Object.fromEntries(
+              countries.map((c, i) => [COUNTRY_MAPS[i].id, { filled: c.filled.length, best: c.best }]),
+            ),
+          }),
       );
     }, []),
   );
@@ -52,7 +63,10 @@ export default function Progress() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>{t.progressTitle}</Text>
-          {data && totals(data.stats).answers === 0 && data.filled === 0 ? (
+          {data &&
+          totals(data.stats).answers === 0 &&
+          data.filled === 0 &&
+          !Object.values(data.countries).some((c) => c.filled > 0 || c.best !== null) ? (
             <Text style={styles.empty}>{t.progressEmpty}</Text>
           ) : (
             data && <Content {...data} />
@@ -63,9 +77,11 @@ export default function Progress() {
   );
 }
 
-function Content({ stats, filled, best }: Data) {
+function Content({ stats, filled, best, countries }: Data) {
   const { colors, styles } = useThemed();
-  const { t, records } = useSettings();
+  const { t, records, language } = useSettings();
+  // Countries whose map was started, in the order of the country list.
+  const started = COUNTRY_MAPS.filter((m) => countries[m.id]?.filled || countries[m.id]?.best !== null);
   const now = new Date();
   const streak = dayStreak(stats.days, now);
   const today = stats.days[dayKey(now)];
@@ -165,6 +181,26 @@ function Content({ stats, filled, best }: Data) {
         ) : (
           <Record icon="map-check-outline" title={t.modeComplete} value={`${filled}`} unit={t.mapUnit(COUNTRIES.length)} />
         )}
+        {started.map((m) => {
+          const c = countries[m.id];
+          return c.best !== null ? (
+            <Record
+              key={m.id}
+              icon="map-legend"
+              title={m[language]}
+              value={formatTime(c.best)}
+              unit={t.bestTimeUnit(Math.max(1, stats.countryMapsDone[m.id] ?? 0))}
+            />
+          ) : (
+            <Record
+              key={m.id}
+              icon="map-legend"
+              title={m[language]}
+              value={`${c.filled}`}
+              unit={t.regionsUnit(m.regions, m.unit[language])}
+            />
+          );
+        })}
         <View style={styles.totals}>
           <Total label={t.answers} value={overall.answers} />
           <Total label={t.hits} value={overall.correct} />

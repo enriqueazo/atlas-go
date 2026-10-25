@@ -40,6 +40,12 @@ export type Stats = {
   maps: MapTime[];
   /** Whole maps painted, all time. */
   mapsDone: number;
+  /** Answers on countries' maps (regions), which have no continent. */
+  regions: Tally;
+  /** Best times on each country's map, by board id. */
+  countryMaps: Record<string, MapTime[]>;
+  /** Each country's maps painted, all time, by board id. */
+  countryMapsDone: Record<string, number>;
 };
 
 export function emptyStats(): Stats {
@@ -52,6 +58,9 @@ export function emptyStats(): Stats {
     runs: { countries: [], capitals: [] },
     maps: [],
     mapsDone: 0,
+    regions: { answers: 0, correct: 0 },
+    countryMaps: {},
+    countryMapsDone: {},
   };
 }
 
@@ -71,15 +80,23 @@ export function continentOf(c: Country): Continent {
 export type AnswerEvent = { mode: Mode; iso: string; correct: boolean };
 
 export function addAnswer(s: Stats, e: AnswerEvent, now: Date): Stats {
-  const key = dayKey(now);
   const country = BY_ISO.get(e.iso);
   const continent = country ? continentOf(country) : null;
   return {
-    ...s,
-    days: trimDays({ ...s.days, [key]: tally(s.days[key], e.correct) }, now),
+    ...addDay(s, e.correct, now),
     continents: continent ? { ...s.continents, [continent]: tally(s.continents[continent], e.correct) } : s.continents,
     known: { ...s.known, [e.mode]: { ...s.known[e.mode], [e.iso]: e.correct } },
   };
+}
+
+function addDay(s: Stats, correct: boolean, now: Date): Stats {
+  const key = dayKey(now);
+  return { ...s, days: trimDays({ ...s.days, [key]: tally(s.days[key], correct) }, now) };
+}
+
+/** A region found, or missed, on a country's map: it counts toward the day and the totals. */
+export function addRegionAnswer(s: Stats, correct: boolean, now: Date): Stats {
+  return { ...addDay(s, correct, now), regions: tally(s.regions, correct) };
 }
 
 /** Saves a run as it grows: the same id replaces the earlier score. */
@@ -93,11 +110,20 @@ export function addRun(s: Stats, mode: Mode, run: Run): Stats {
 }
 
 export function addMap(s: Stats, map: MapTime): Stats {
+  return { ...s, maps: topMaps([...s.maps, map]), mapsDone: s.mapsDone + 1 };
+}
+
+export function addCountryMap(s: Stats, id: string, map: MapTime): Stats {
   return {
     ...s,
-    maps: [...s.maps, map].sort((a, b) => a.ms - b.ms || a.at - b.at).slice(0, KEEP_RUNS),
-    mapsDone: s.mapsDone + 1,
+    countryMaps: { ...s.countryMaps, [id]: topMaps([...(s.countryMaps[id] ?? []), map]) },
+    countryMapsDone: { ...s.countryMapsDone, [id]: (s.countryMapsDone[id] ?? 0) + 1 },
   };
+}
+
+/** Fastest first; on a tie, the earlier map keeps its place. */
+function topMaps(maps: MapTime[]) {
+  return maps.sort((a, b) => a.ms - b.ms || a.at - b.at).slice(0, KEEP_RUNS);
 }
 
 /** Most points first; on a tie, the earlier run keeps its place. */
@@ -156,7 +182,7 @@ export function accuracy(t: Tally): number | null {
 }
 
 export function totals(s: Stats): Tally {
-  return Object.values(s.continents).reduce(
+  return [...Object.values(s.continents), s.regions].reduce(
     (a, t) => ({ answers: a.answers + t.answers, correct: a.correct + t.correct }),
     { answers: 0, correct: 0 },
   );
@@ -213,3 +239,5 @@ function change(update: (s: Stats) => Stats): Promise<void> {
 export const trackAnswer = (e: AnswerEvent) => change((s) => addAnswer(s, e, new Date()));
 export const trackRun = (mode: Mode, run: Run) => change((s) => addRun(s, mode, run));
 export const trackMap = (map: MapTime) => change((s) => addMap(s, map));
+export const trackRegion = (correct: boolean) => change((s) => addRegionAnswer(s, correct, new Date()));
+export const trackCountryMap = (id: string, map: MapTime) => change((s) => addCountryMap(s, id, map));

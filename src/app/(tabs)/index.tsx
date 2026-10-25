@@ -3,24 +3,31 @@ import { useNavigation } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { Animated, BackHandler, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
 import { OptionCard, type OptionStatus } from '@/components/OptionCard';
 import { tabBarStyle } from '@/components/tabBar';
 import { Button, Chip, Screen } from '@/components/ui';
 import { WorldMap } from '@/components/WorldMap';
-import { formatTime, WORLD_BOARD } from '@/game/complete';
+import { formatTime, WORLD_BOARD, type Board } from '@/game/complete';
+import { COUNTRY_MAPS, countryBoard, type CountryMap } from '@/game/countries';
 import { levelFor, MAX_LEVEL, nextQuestion, optionLabel, PER_LEVEL, pointsFor, type Question } from '@/game/engine';
-import { useBoardProgress } from '@/game/progress';
+import { loadSaved, useBoardProgress } from '@/game/progress';
 import { trackAnswer, trackRun } from '@/game/stats';
 import { useCompleteGame } from '@/game/useCompleteGame';
-import { BY_ISO } from '@/game/world';
+import { BY_ISO, LAND } from '@/game/world';
 import { useSettings, type Mode } from '@/settings';
 import { useSound } from '@/sounds';
 import { fonts, radius, space, themed } from '@/theme';
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
-/** The quiz modes keep a record; Complete the map keeps its progress instead. */
-type Play = Mode | 'complete';
+/**
+ * The quiz modes keep a record; Complete the map keeps its progress instead,
+ * and Complete a country keeps one per country.
+ */
+type Play = Mode | 'complete' | 'country';
+/** What the country list shows for each country: how far along, and the record. */
+type Summary = { filled: number; best: number | null };
 
 // One screen for the lobby and the game, so the map can zoom from the whole
 // world into the first question and back out when you quit.
@@ -48,9 +55,44 @@ export default function Game() {
   const [onMap, setOnMap] = useState(false);
   const progress = useBoardProgress(WORLD_BOARD);
   const complete = useCompleteGame(WORLD_BOARD, progress, play);
+  // Complete a country: the country picked, and its own map and progress.
+  const [country, setCountry] = useState<CountryMap | null>(null);
+  const [countryMap, setCountryMap] = useState<Board>(() => countryBoard(COUNTRY_MAPS[0].iso));
+  const countryProgress = useBoardProgress(countryMap);
+  const countryGame = useCompleteGame(countryMap, countryProgress, play);
+  // A country was picked; the game starts once its progress has loaded.
+  const [starting, setStarting] = useState(false);
+  const [summaries, setSummaries] = useState<Record<string, Summary>>({});
 
-  const painting = mode === 'complete';
-  const playing = painting || (mode !== null && question !== null);
+  const picking = mode === 'country' && !country;
+  const painting = mode === 'complete' || (mode === 'country' && !!country);
+  const board = mode === 'country' ? countryMap : WORLD_BOARD;
+  const boardProgress = mode === 'country' ? countryProgress : progress;
+  const game = mode === 'country' ? countryGame : complete;
+  // Countries or Capitals, the quiz modes.
+  const quiz = mode === 'countries' || mode === 'capitals' ? mode : null;
+  const playing = painting || picking || (quiz !== null && question !== null);
+
+  // Every country's progress and record, for the lobby and the country list.
+  useEffect(() => {
+    if (mode !== null && !picking) return;
+    let live = true;
+    Promise.all(COUNTRY_MAPS.map((m) => loadSaved(m.id))).then((all) => {
+      if (!live) return;
+      setSummaries(
+        Object.fromEntries(all.map((s, i) => [COUNTRY_MAPS[i].id, { filled: s.filled.length, best: s.best }])),
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [mode, picking]);
+
+  useEffect(() => {
+    if (!starting || !countryProgress.ready) return;
+    setStarting(false);
+    countryGame.start();
+  }, [starting, countryProgress.ready]);
 
   // The tab bar steps aside while a game is on.
   useEffect(() => {
@@ -81,6 +123,11 @@ export default function Game() {
       complete.start();
       return;
     }
+    if (m === 'country') {
+      setMode(m);
+      setCountry(null);
+      return;
+    }
     recent.current = [];
     setMode(m);
     setPoints(0);
@@ -91,30 +138,44 @@ export default function Game() {
     ask(m, 0);
   };
 
+  const pickCountry = (m: CountryMap) => {
+    play('zoom');
+    scroll.current?.scrollTo({ y: 0, animated: false });
+    setCountryMap(countryBoard(m.iso));
+    setCountry(m);
+    setStarting(true);
+  };
+
   const quit = () => {
-    if (painting) complete.stop();
+    if (painting) game.stop();
+    // Leaving a country's map goes back to the list of countries.
+    if (mode === 'country' && country) {
+      setStarting(false);
+      setCountry(null);
+      return;
+    }
     setMode(null);
     setQuestion(null);
     setPicked(null);
   };
 
   const answer = (i: number) => {
-    if (!question || !mode || mode === 'complete' || picked !== null) return;
+    if (!question || !quiz || picked !== null) return;
     setPicked(i);
-    trackAnswer({ mode, iso: question.target.iso, correct: i === question.answer });
+    trackAnswer({ mode: quiz, iso: question.target.iso, correct: i === question.answer });
     if (i === question.answer) {
       const pts = pointsFor(question);
       const total = points + pts;
-      const beat = total > records[mode];
-      const fanfare = beat && !celebrated.current && records[mode] > 0;
+      const beat = total > records[quiz];
+      const fanfare = beat && !celebrated.current && records[quiz] > 0;
       if (beat) {
         celebrated.current = true;
-        saveRecord(mode, total);
+        saveRecord(quiz, total);
       }
       setGained(pts);
       setPoints(total);
       setStreak(streak + 1);
-      trackRun(mode, { id: runId.current, points: total, streak: streak + 1, at: Date.now() });
+      trackRun(quiz, { id: runId.current, points: total, streak: streak + 1, at: Date.now() });
       setIsRecord(fanfare);
       play(fanfare ? 'record' : 'correct');
     } else {
@@ -129,9 +190,9 @@ export default function Game() {
   };
 
   const next = () => {
-    if (!mode || mode === 'complete') return;
+    if (!quiz) return;
     play('tap');
-    ask(mode, streak);
+    ask(quiz, streak);
   };
 
   const answered = picked !== null;
@@ -167,7 +228,18 @@ export default function Game() {
           .filter(Boolean)
           .join(' · ') || null,
     },
+    {
+      id: 'country',
+      icon: 'map-legend',
+      title: t.modeCountry,
+      description: t.modeCountryDesc,
+      chip: (() => {
+        const n = Object.values(summaries).filter((x) => x.best !== null).length;
+        return n > 0 ? t.countryRecords(n) : null;
+      })(),
+    },
   ];
+  const unit = country ? country.unit[language] : '';
 
   return (
     <Screen>
@@ -181,25 +253,42 @@ export default function Game() {
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-        {painting ? (
+        {picking ? (
           <View style={styles.header}>
             <Pressable accessibilityRole="button" accessibilityLabel={t.close} onPress={quit} hitSlop={12}>
               <Text style={styles.close}>✕</Text>
             </Pressable>
-            <View style={styles.streak} accessibilityLabel={t.filledLabel(progress.filled.size, progress.total)}>
+            <Text style={[styles.streakText, styles.headerTitle]}>{t.pickCountry}</Text>
+          </View>
+        ) : painting ? (
+          <View style={styles.header}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t.close} onPress={quit} hitSlop={12}>
+              <Text style={styles.close}>✕</Text>
+            </Pressable>
+            <View
+              style={styles.streak}
+              accessibilityLabel={
+                country
+                  ? t.regionsFilledLabel(boardProgress.filled.size, boardProgress.total, unit)
+                  : t.filledLabel(boardProgress.filled.size, boardProgress.total)
+              }
+            >
               <MaterialCommunityIcons name="map-check-outline" size={20} color={colors.purpleSoft} />
-              <Text style={styles.streakText}>{t.filledOf(progress.filled.size, progress.total)}</Text>
+              <Text style={styles.streakText} numberOfLines={1}>
+                {country ? `${country[language]} · ` : ''}
+                {t.filledOf(boardProgress.filled.size, boardProgress.total)}
+              </Text>
             </View>
-            <Clock time={complete.elapsed} running={complete.running} />
+            <Clock time={game.elapsed} running={game.running} />
           </View>
         ) : playing ? (
           <View style={styles.header}>
             <Pressable accessibilityRole="button" accessibilityLabel={t.close} onPress={quit} hitSlop={12}>
               <Text style={styles.close}>✕</Text>
             </Pressable>
-            <View style={styles.streak} accessibilityLabel={t.recordLabel(Math.max(records[mode], points))}>
+            <View style={styles.streak} accessibilityLabel={t.recordLabel(Math.max(records[quiz ?? 'countries'], points))}>
               <MaterialCommunityIcons name="trophy-outline" size={20} color={colors.purpleSoft} />
-              <Text style={styles.streakText}>{t.recordLabel(Math.max(records[mode], points))}</Text>
+              <Text style={styles.streakText}>{t.recordLabel(Math.max(records[quiz ?? 'countries'], points))}</Text>
             </View>
             <Text style={styles.score} accessibilityLabel={`${t.points}: ${points}`}>
               {points}
@@ -217,33 +306,40 @@ export default function Game() {
           </View>
         )}
 
+        {picking ? (
+          <CountryList summaries={summaries} onPick={pickCountry} />
+        ) : (
         <View style={styles.map}>
           {painting ? (
             <WorldMap
-              focus={complete.revealed ? complete.target : null}
+              board={board}
+              focus={game.revealed ? game.target : null}
               mode="countries"
               status="ask"
-              paint={{ filled: progress.filled, flash: complete.flash }}
-              onTap={complete.tap}
+              paint={{ filled: boardProgress.filled, flash: game.flash }}
+              onTap={game.tap}
               onGesture={setOnMap}
             />
           ) : (
             <WorldMap
               focus={question?.target ?? null}
-              mode={mode ?? 'countries'}
+              mode={quiz ?? 'countries'}
               status={status}
               onGesture={setOnMap}
             />
           )}
         </View>
+        )}
 
-        {painting ? (
+        {picking ? null : painting ? (
           <CompletePanel
-            game={complete}
-            filled={progress.filled.size}
-            total={progress.total}
-            misses={progress.misses}
-            best={progress.best}
+            game={game}
+            board={board}
+            country={country}
+            filled={boardProgress.filled.size}
+            total={boardProgress.total}
+            misses={boardProgress.misses}
+            best={boardProgress.best}
           />
         ) : playing && question ? (
           <View style={styles.panel}>
@@ -294,7 +390,7 @@ export default function Game() {
                 <View style={styles.modeText}>
                   {m.chip && (
                     <View style={styles.chips}>
-                      <Chip label={m.chip} tone={m.id === 'complete' ? 'purple' : 'green'} />
+                      <Chip label={m.chip} tone={m.id === 'complete' || m.id === 'country' ? 'purple' : 'green'} />
                     </View>
                   )}
                   <Text style={styles.modeTitle}>{m.title}</Text>
@@ -332,12 +428,17 @@ function Clock({ time, running }: { time: () => number; running: boolean }) {
 /** The place to find, what the last tap was, and how much of the map is painted. */
 function CompletePanel({
   game,
+  board,
+  country,
   filled,
   total,
   misses,
   best,
 }: {
   game: ReturnType<typeof useCompleteGame>;
+  board: Board;
+  /** The country whose map this is; null on the world map. */
+  country: CountryMap | null;
   filled: number;
   total: number;
   misses: number;
@@ -363,12 +464,13 @@ function CompletePanel({
   if (!game.target) return <View style={styles.panel} />;
 
   const note = game.note;
-  const name = (iso: string) => BY_ISO.get(iso)?.[language] ?? iso;
-  let noteText = t.tapHint;
+  const name = (iso: string) => board.regions.find((r) => r.iso === iso)?.[language] ?? iso;
+  let noteText = country ? t.tapHintRegion : t.tapHint;
   let noteColor = colors.textMuted;
   if (note?.kind === 'right') [noteText, noteColor] = [t.painted(name(note.iso)), colors.green];
   else if (note?.kind === 'wrong') [noteText, noteColor] = [t.thatIs(name(note.iso)), colors.wrong];
   else if (note?.kind === 'sea') noteText = t.sea;
+  else if (note?.kind === 'outside' && country) noteText = t.outside(country[language]);
 
   return (
     <View style={styles.panel}>
@@ -383,7 +485,12 @@ function CompletePanel({
       </View>
       <View style={styles.levelCard}>
         <View style={styles.levelRow}>
-          <Text style={styles.levelText} accessibilityLabel={t.filledLabel(filled, total)}>
+          <Text
+            style={styles.levelText}
+            accessibilityLabel={
+              country ? t.regionsFilledLabel(filled, total, country.unit[language]) : t.filledLabel(filled, total)
+            }
+          >
             {t.filledOf(filled, total)}
           </Text>
           <Pressable accessibilityRole="button" onPress={game.skip} hitSlop={12}>
@@ -395,6 +502,71 @@ function CompletePanel({
         </View>
       </View>
     </View>
+  );
+}
+
+/** Complete a country: every country on offer, with its progress and record. */
+function CountryList({
+  summaries,
+  onPick,
+}: {
+  summaries: Record<string, Summary>;
+  onPick: (m: CountryMap) => void;
+}) {
+  const { colors, styles } = useThemed();
+  const { t, language } = useSettings();
+  return (
+    <View style={styles.panel}>
+      <Text style={styles.section}>{t.pickCountryHint}</Text>
+      {COUNTRY_MAPS.map((m) => {
+        const s = summaries[m.id];
+        const chip =
+          [
+            s && s.filled > 0 && s.filled < m.regions ? t.filledOf(s.filled, m.regions) : null,
+            s && s.best !== null ? t.bestTime(formatTime(s.best)) : null,
+          ]
+            .filter(Boolean)
+            .join(' · ') || null;
+        return (
+          <Pressable
+            key={m.id}
+            accessibilityRole="button"
+            onPress={() => onPick(m)}
+            style={({ pressed }) => [styles.modeCard, pressed && { transform: [{ scale: 0.98 }] }]}
+          >
+            <View style={styles.modeIcon}>
+              <Silhouette iso={m.iso} color={colors.purpleSoft} />
+            </View>
+            <View style={styles.modeText}>
+              {chip && (
+                <View style={styles.chips}>
+                  <Chip label={chip} tone="purple" />
+                </View>
+              )}
+              <Text style={styles.modeTitle}>{m[language]}</Text>
+              <Text style={styles.modeDescription}>{t.regionCount(m.regions, m.unit[language])}</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={28} color={colors.purpleSoft} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** A country's outline from the world map, for the country list. */
+function Silhouette({ iso, color }: { iso: string; color: string }) {
+  const shape = LAND.find((l) => l.iso === iso);
+  const c = BY_ISO.get(iso);
+  if (!shape || !c) return null;
+  // A square around the country's main part, so far-off islands fall outside.
+  const [x, y, w, h] = c.box;
+  const side = Math.max(w, h) * 1.1;
+  const box = `${x + w / 2 - side / 2} ${y + h / 2 - side / 2} ${side} ${side}`;
+  return (
+    <Svg width={36} height={36} viewBox={box}>
+      <Path d={shape.d} fill={color} />
+    </Svg>
   );
 }
 
@@ -488,6 +660,7 @@ const useThemed = themed((colors) => ({
     title: { color: colors.text, fontFamily: fonts.heavy, fontSize: 32 },
     subtitle: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 15 },
     header: { flexDirection: 'row', alignItems: 'center', gap: space(4), paddingVertical: space(3) },
+    headerTitle: { flex: 1, textAlign: 'center', marginRight: space(6) },
     close: { color: colors.textMuted, fontSize: 20, fontFamily: fonts.bold },
     streak: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space(1) },
     streakText: { color: colors.purpleSoft, fontFamily: fonts.heavy, fontSize: 17 },

@@ -9,6 +9,11 @@ record stays. Spanish and English.
 
 - **Países / Countries**: a country lights up on the map; pick its name from three.
 - **Capitales / Capitals**: a dot marks a capital; pick which city it is from three.
+- **Completa el mapa / Complete the map**: the game names a country and you tap
+  it to paint it. The clock runs, each wrong tap adds 5 s, and the fastest whole
+  world is the record.
+- **Completa un país / Complete a country**: the same, on one country's map of
+  provinces, states or regions. Each country keeps its own record.
 
 Every 5 right answers in a row opens a harder level (1 to 5). Level 1 is the
 countries almost everyone can place; level 5 adds microstates and small island
@@ -33,7 +38,9 @@ npx expo start        # then press i, a or w
 - `src/game/engine.ts`: question picking, levels and points.
 - `src/theme.tsx`, `src/components/ui.tsx`, `src/components/OptionCard.tsx`: ported from Vocablo (`enriqueazo/e-e`), plus the map colours. Styles follow Vocablo's `themed((colors) => ({ colors, styles }))` pattern.
 - `src/i18n.ts`: every user-visible string in Spanish and English.
-- `src/data/world.json`: generated map and country data; don't edit by hand.
+- `src/game/complete.ts`, `src/game/useCompleteGame.ts`: Complete the map, on any `Board` (the world or a country).
+- `src/game/countries.ts`: the countries you can complete, loaded only when played.
+- `src/data/world.json`, `src/data/regions/*.json`: generated map data; don't edit by hand.
 
 ## Map data
 
@@ -49,6 +56,18 @@ shared borders, rounds the corners for the cartoon look, drops Antarctica, picks
 five map colours so neighbours never match, and works out each country's zoom
 frame and difficulty tier. Capital names in both languages live in
 `scripts/capitals.mjs`.
+
+Each country's map comes from Natural Earth's 1:10m states and provinces:
+
+```bash
+node scripts/build-regions.mjs        # all of them
+node scripts/build-regions.mjs ES     # one
+```
+
+The countries and how their provinces become regions (Spain's comunidades,
+Italy's and France's regions, the Canaries and Alaska moved into insets) are
+listed at the top of the script. Neighbouring countries are drawn as blank
+land around the map. Bigger regions come first, the smallest last.
 
 ## Sounds
 
