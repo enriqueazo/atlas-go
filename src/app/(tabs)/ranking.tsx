@@ -62,6 +62,7 @@ export default function RankingTab() {
     { id: 'countries', label: t.modeCountries },
     { id: 'capitals', label: t.modeCapitals },
     { id: 'silhouette', label: t.modeSilhouette },
+    { id: 'flags', label: t.modeFlags },
     { id: 'daily', label: t.modeDaily },
     { id: 'complete', label: t.modeComplete },
     { id: 'country', label: t.modeCountry },

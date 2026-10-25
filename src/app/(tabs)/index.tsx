@@ -5,6 +5,7 @@ import { Animated, BackHandler, Pressable, ScrollView, Share, StyleSheet, Text, 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { OptionCard, type OptionStatus } from '@/components/OptionCard';
+import { Flag } from '@/components/Flag';
 import { Silhouette } from '@/components/Silhouette';
 import { tabBarStyle } from '@/components/tabBar';
 import { Button, Chip, Screen } from '@/components/ui';
@@ -87,8 +88,9 @@ export default function Game() {
   const board = mode === 'country' ? countryMap : WORLD_BOARD;
   const boardProgress = mode === 'country' ? countryProgress : progress;
   const game = mode === 'country' ? countryGame : complete;
-  // Countries, Capitals or Silhouettes, the quiz modes.
-  const quiz = mode === 'countries' || mode === 'capitals' || mode === 'silhouette' ? mode : null;
+  // Countries, Capitals, Silhouettes or Flags, the quiz modes.
+  const quiz =
+    mode === 'countries' || mode === 'capitals' || mode === 'silhouette' || mode === 'flags' ? mode : null;
   const isDaily = mode === 'daily';
   const playing = painting || picking || isDaily || (quiz !== null && question !== null);
   const dayPicks = picksFor(daily, day);
@@ -268,8 +270,16 @@ export default function Game() {
   const answered = picked !== null;
   const right = answered && picked === question?.answer;
   const status = !answered ? 'ask' : right ? 'right' : 'wrong';
-  // A silhouette hides the map until it is answered, then the map shows where it is.
-  const shape = question?.mode === 'silhouette' && !answered ? question.target.iso : null;
+  const prompt = (q: Question) =>
+    q.mode === 'capitals'
+      ? t.askCapital
+      : q.mode === 'silhouette'
+        ? t.askSilhouette
+        : q.mode === 'flags'
+          ? t.askFlag
+          : t.askCountry;
+  // A silhouette or a flag hides the map until it is answered, then the map shows where it is.
+  const cover = (question?.mode === 'silhouette' || question?.mode === 'flags') && !answered ? question : null;
   const today = scoreDay(day, dayPicks);
   const dayStreak = currentStreak(daily, day);
   const modes: { id: Play; icon: IconName; title: string; description: string; chip: string | null }[] = [
@@ -310,6 +320,13 @@ export default function Game() {
       title: t.modeSilhouette,
       description: t.modeSilhouetteDesc,
       chip: records.silhouette > 0 ? t.recordLabel(records.silhouette) : null,
+    },
+    {
+      id: 'flags',
+      icon: 'flag-variant-outline',
+      title: t.modeFlags,
+      description: t.modeFlagsDesc,
+      chip: records.flags > 0 ? t.recordLabel(records.flags) : null,
     },
     {
       id: 'complete',
@@ -435,15 +452,19 @@ export default function Game() {
             />
           ) : (
             <WorldMap
-              focus={shape ? null : (question?.target ?? null)}
+              focus={cover ? null : (question?.target ?? null)}
               mode={question?.mode === 'capitals' ? 'capitals' : 'countries'}
               status={status}
               onGesture={setOnMap}
             />
           )}
-          {shape && (
-            <View style={styles.shape} accessibilityLabel={t.askSilhouette}>
-              <Silhouette iso={shape} color={colors.purple} size="80%" />
+          {cover && (
+            <View style={styles.cover} accessibilityLabel={prompt(cover)}>
+              {cover.mode === 'flags' ? (
+                <Flag iso={cover.target.iso} width="86%" />
+              ) : (
+                <Silhouette iso={cover.target.iso} color={colors.purple} size="80%" />
+              )}
             </View>
           )}
         </View>
@@ -464,7 +485,7 @@ export default function Game() {
         ) : playing && question ? (
           <View style={styles.panel}>
             <Text style={styles.prompt}>
-              {question.mode === 'capitals' ? t.askCapital : question.mode === 'silhouette' ? t.askSilhouette : t.askCountry}
+              {prompt(question)}
             </Text>
             <View style={styles.options}>
               {question.options.map((o, i) => {
@@ -834,7 +855,7 @@ const useThemed = themed((colors) => ({
       fontVariant: ['tabular-nums'],
     },
     map: { flex: 1, minHeight: 180 },
-    shape: {
+    cover: {
       ...StyleSheet.absoluteFill,
       alignItems: 'center',
       justifyContent: 'center',

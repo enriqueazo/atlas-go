@@ -1,5 +1,7 @@
 import type { Mode } from '@/settings';
 
+import { FLAGS } from '@/data/flags';
+
 import { COUNTRIES, SILHOUETTES, type Country } from './world';
 
 export type Question = {
@@ -27,7 +29,9 @@ const playable = (mode: Mode) =>
     ? COUNTRIES.filter((c) => c.capital)
     : mode === 'silhouette'
       ? COUNTRIES.filter((c) => SILHOUETTES[c.iso])
-      : COUNTRIES;
+      : mode === 'flags'
+        ? COUNTRIES.filter((c) => FLAGS[c.iso])
+        : COUNTRIES;
 
 function pickWeighted<T>(items: T[], weight: (t: T) => number, random: Random) {
   const total = items.reduce((s, t) => s + weight(t), 0);
