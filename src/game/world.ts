@@ -1,4 +1,5 @@
 import data from '@/data/world.json';
+import silhouettes from '@/data/silhouettes.json';
 
 /** A place on a map: a country on the world, or a region on a country's map. */
 export type Place = {
@@ -27,3 +28,7 @@ export const MAP_HEIGHT: number = data.height;
 export const LAND = data.land as LandShape[];
 export const COUNTRIES = data.countries as Country[];
 export const BY_ISO = new Map(COUNTRIES.map((c) => [c.iso, c]));
+
+/** Each country's outline alone, fitted to a SILHOUETTE_SIZE square; specks and scattered islands have none. */
+export const SILHOUETTE_SIZE: number = silhouettes.size;
+export const SILHOUETTES = silhouettes.shapes as Record<string, string>;

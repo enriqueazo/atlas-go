@@ -1,21 +1,35 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useNavigation } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { Animated, BackHandler, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
+import { Animated, BackHandler, Pressable, ScrollView, Share, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
 
 import { OptionCard, type OptionStatus } from '@/components/OptionCard';
+import { Silhouette } from '@/components/Silhouette';
 import { tabBarStyle } from '@/components/tabBar';
 import { Button, Chip, Screen } from '@/components/ui';
 import { WorldMap } from '@/components/WorldMap';
 import { formatTime, WORLD_BOARD, type Board } from '@/game/complete';
 import { COUNTRY_MAPS, countryBoard, type CountryMap } from '@/game/countries';
+import {
+  currentStreak,
+  DAILY_ROUNDS,
+  dailyLevel,
+  dailyQuestions,
+  EMPTY_DAILY,
+  getDaily,
+  pick,
+  picksFor,
+  saveDaily,
+  scoreDay,
+  squares,
+  type DailyRecord,
+  type DailyScore,
+} from '@/game/daily';
 import { levelFor, MAX_LEVEL, nextQuestion, optionLabel, PER_LEVEL, pointsFor, type Question } from '@/game/engine';
 import { loadSaved, useBoardProgress } from '@/game/progress';
-import { trackAnswer, trackRun } from '@/game/stats';
+import { dayKey, trackAnswer, trackDaily, trackRun } from '@/game/stats';
 import { useCompleteGame } from '@/game/useCompleteGame';
-import { BY_ISO, LAND } from '@/game/world';
 import { useSettings, type Mode } from '@/settings';
 import { useSound } from '@/sounds';
 import { fonts, radius, space, themed } from '@/theme';
@@ -23,9 +37,9 @@ import { fonts, radius, space, themed } from '@/theme';
 type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
 /**
  * The quiz modes keep a record; Complete the map keeps its progress instead,
- * and Complete a country keeps one per country.
+ * Complete a country keeps one per country, and the map of the day a streak.
  */
-type Play = Mode | 'complete' | 'country';
+type Play = Mode | 'complete' | 'country' | 'daily';
 /** What the country list shows for each country: how far along, and the record. */
 type Summary = { filled: number; best: number | null };
 
@@ -63,15 +77,32 @@ export default function Game() {
   // A country was picked; the game starts once its progress has loaded.
   const [starting, setStarting] = useState(false);
   const [summaries, setSummaries] = useState<Record<string, Summary>>({});
+  // Map of the day: the saved picks and streak, and the day being played, so
+  // a game that runs past midnight stays on its day.
+  const [daily, setDaily] = useState<DailyRecord>(EMPTY_DAILY);
+  const [day, setDay] = useState(() => dayKey(new Date()));
 
   const picking = mode === 'country' && !country;
   const painting = mode === 'complete' || (mode === 'country' && !!country);
   const board = mode === 'country' ? countryMap : WORLD_BOARD;
   const boardProgress = mode === 'country' ? countryProgress : progress;
   const game = mode === 'country' ? countryGame : complete;
-  // Countries or Capitals, the quiz modes.
-  const quiz = mode === 'countries' || mode === 'capitals' ? mode : null;
-  const playing = painting || picking || (quiz !== null && question !== null);
+  // Countries, Capitals or Silhouettes, the quiz modes.
+  const quiz = mode === 'countries' || mode === 'capitals' || mode === 'silhouette' ? mode : null;
+  const isDaily = mode === 'daily';
+  const playing = painting || picking || isDaily || (quiz !== null && question !== null);
+  const dayPicks = picksFor(daily, day);
+
+  // The map of the day's progress, for the lobby card.
+  useEffect(() => {
+    if (mode !== null) return;
+    let live = true;
+    setDay(dayKey(new Date()));
+    getDaily().then((r) => live && setDaily(r));
+    return () => {
+      live = false;
+    };
+  }, [mode]);
 
   // Every country's progress and record, for the lobby and the country list.
   useEffect(() => {
@@ -128,6 +159,18 @@ export default function Game() {
       setCountry(null);
       return;
     }
+    if (m === 'daily') {
+      // Picks up where the player left off, or shows the result once done.
+      const today = dayKey(new Date());
+      const done = picksFor(daily, today);
+      setDay(today);
+      setMode(m);
+      setPoints(scoreDay(today, done).points);
+      setIsRecord(false);
+      setQuestion(done.length < DAILY_ROUNDS ? dailyQuestions(today)[done.length] : null);
+      setPicked(null);
+      return;
+    }
     recent.current = [];
     setMode(m);
     setPoints(0);
@@ -159,7 +202,27 @@ export default function Game() {
     setPicked(null);
   };
 
+  const answerDaily = (i: number) => {
+    if (!question || picked !== null) return;
+    const right = i === question.answer;
+    const after = pick(daily, day, i);
+    setPicked(i);
+    setDaily(after);
+    saveDaily(after);
+    trackAnswer({ mode: question.mode, iso: question.target.iso, correct: right });
+    if (right) {
+      setGained(pointsFor(question));
+      setPoints(points + pointsFor(question));
+    }
+    play(right ? 'correct' : 'wrong');
+    if (after.picks.length === DAILY_ROUNDS) {
+      const score = scoreDay(day, after.picks);
+      trackDaily({ day, points: score.points, correct: score.correct, at: Date.now() });
+    }
+  };
+
   const answer = (i: number) => {
+    if (isDaily) return answerDaily(i);
     if (!question || !quiz || picked !== null) return;
     setPicked(i);
     trackAnswer({ mode: quiz, iso: question.target.iso, correct: i === question.answer });
@@ -190,6 +253,13 @@ export default function Game() {
   };
 
   const next = () => {
+    if (isDaily) {
+      const n = dayPicks.length;
+      play(n < DAILY_ROUNDS ? 'tap' : 'record');
+      setQuestion(n < DAILY_ROUNDS ? dailyQuestions(day)[n] : null);
+      setPicked(null);
+      return;
+    }
     if (!quiz) return;
     play('tap');
     ask(quiz, streak);
@@ -198,7 +268,28 @@ export default function Game() {
   const answered = picked !== null;
   const right = answered && picked === question?.answer;
   const status = !answered ? 'ask' : right ? 'right' : 'wrong';
+  // A silhouette hides the map until it is answered, then the map shows where it is.
+  const shape = question?.mode === 'silhouette' && !answered ? question.target.iso : null;
+  const today = scoreDay(day, dayPicks);
+  const dayStreak = currentStreak(daily, day);
   const modes: { id: Play; icon: IconName; title: string; description: string; chip: string | null }[] = [
+    {
+      id: 'daily',
+      icon: 'calendar-star',
+      title: t.modeDaily,
+      description: t.modeDailyDesc(DAILY_ROUNDS),
+      chip:
+        [
+          dayPicks.length === DAILY_ROUNDS
+            ? t.dailyToday(today.correct, DAILY_ROUNDS)
+            : dayPicks.length > 0
+              ? t.dailyGoing(dayPicks.length, DAILY_ROUNDS)
+              : null,
+          dayStreak > 0 ? t.dailyStreakChip(dayStreak) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || null,
+    },
     {
       id: 'countries',
       icon: 'earth',
@@ -212,6 +303,13 @@ export default function Game() {
       title: t.modeCapitals,
       description: t.modeCapitalsDesc,
       chip: records.capitals > 0 ? t.recordLabel(records.capitals) : null,
+    },
+    {
+      id: 'silhouette',
+      icon: 'shape-outline',
+      title: t.modeSilhouette,
+      description: t.modeSilhouetteDesc,
+      chip: records.silhouette > 0 ? t.recordLabel(records.silhouette) : null,
     },
     {
       id: 'complete',
@@ -281,6 +379,21 @@ export default function Game() {
             </View>
             <Clock time={game.elapsed} running={game.running} />
           </View>
+        ) : isDaily ? (
+          <View style={styles.header}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t.close} onPress={quit} hitSlop={12}>
+              <Text style={styles.close}>✕</Text>
+            </Pressable>
+            <View style={styles.streak}>
+              <MaterialCommunityIcons name="calendar-star" size={20} color={colors.purpleSoft} />
+              <Text style={styles.streakText} numberOfLines={1}>
+                {t.modeDaily}
+              </Text>
+            </View>
+            <Text style={styles.score} accessibilityLabel={`${t.points}: ${points}`}>
+              {points}
+            </Text>
+          </View>
         ) : playing ? (
           <View style={styles.header}>
             <Pressable accessibilityRole="button" accessibilityLabel={t.close} onPress={quit} hitSlop={12}>
@@ -322,11 +435,16 @@ export default function Game() {
             />
           ) : (
             <WorldMap
-              focus={question?.target ?? null}
-              mode={quiz ?? 'countries'}
+              focus={shape ? null : (question?.target ?? null)}
+              mode={question?.mode === 'capitals' ? 'capitals' : 'countries'}
               status={status}
               onGesture={setOnMap}
             />
+          )}
+          {shape && (
+            <View style={styles.shape} accessibilityLabel={t.askSilhouette}>
+              <Silhouette iso={shape} color={colors.purple} size="80%" />
+            </View>
           )}
         </View>
         )}
@@ -341,9 +459,13 @@ export default function Game() {
             misses={boardProgress.misses}
             best={boardProgress.best}
           />
+        ) : isDaily && !question ? (
+          <DailyPanel day={day} score={today} streak={dayStreak} />
         ) : playing && question ? (
           <View style={styles.panel}>
-            <Text style={styles.prompt}>{question.mode === 'countries' ? t.askCountry : t.askCapital}</Text>
+            <Text style={styles.prompt}>
+              {question.mode === 'capitals' ? t.askCapital : question.mode === 'silhouette' ? t.askSilhouette : t.askCountry}
+            </Text>
             <View style={styles.options}>
               {question.options.map((o, i) => {
                 let optionStatus: OptionStatus = 'idle';
@@ -371,6 +493,7 @@ export default function Game() {
               gained={gained}
               streak={streak}
               question={question}
+              round={isDaily ? { n: dayPicks.length - (answered ? 1 : 0), total: DAILY_ROUNDS } : null}
               onNext={next}
             />
           </View>
@@ -390,7 +513,7 @@ export default function Game() {
                 <View style={styles.modeText}>
                   {m.chip && (
                     <View style={styles.chips}>
-                      <Chip label={m.chip} tone={m.id === 'complete' || m.id === 'country' ? 'purple' : 'green'} />
+                      <Chip label={m.chip} tone={m.id === 'complete' || m.id === 'country' || m.id === 'daily' ? 'purple' : 'green'} />
                     </View>
                   )}
                   <Text style={styles.modeTitle}>{m.title}</Text>
@@ -535,7 +658,7 @@ function CountryList({
             style={({ pressed }) => [styles.modeCard, pressed && { transform: [{ scale: 0.98 }] }]}
           >
             <View style={styles.modeIcon}>
-              <Silhouette iso={m.iso} color={colors.purpleSoft} />
+              <Silhouette iso={m.iso} color={colors.purpleSoft} size={36} />
             </View>
             <View style={styles.modeText}>
               {chip && (
@@ -554,19 +677,40 @@ function CountryList({
   );
 }
 
-/** A country's outline from the world map, for the country list. */
-function Silhouette({ iso, color }: { iso: string; color: string }) {
-  const shape = LAND.find((l) => l.iso === iso);
-  const c = BY_ISO.get(iso);
-  if (!shape || !c) return null;
-  // A square around the country's main part, so far-off islands fall outside.
-  const [x, y, w, h] = c.box;
-  const side = Math.max(w, h) * 1.1;
-  const box = `${x + w / 2 - side / 2} ${y + h / 2 - side / 2} ${side} ${side}`;
+/** The map of the day, once done: the score, a square per question, the streak and Share. */
+function DailyPanel({ day, score, streak }: { day: string; score: DailyScore; streak: number }) {
+  const { colors, styles } = useThemed();
+  const { t, language } = useSettings();
+  const share = () => {
+    const [y, m, d] = day.split('-').map(Number);
+    const date = new Date(y, m - 1, d).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
+      day: 'numeric',
+      month: 'short',
+    });
+    Share.share({ message: t.shareText(date, squares(score.results), score.correct, DAILY_ROUNDS, score.points) }).catch(
+      () => {},
+    );
+  };
   return (
-    <Svg width={36} height={36} viewBox={box}>
-      <Path d={shape.d} fill={color} />
-    </Svg>
+    <View style={styles.panel}>
+      <View style={styles.footer}>
+        <View>
+          <Text style={[styles.verdict, { color: colors.green }]}>{t.dailyDone}</Text>
+          <Text style={styles.answer}>{t.dailyScore(score.correct, DAILY_ROUNDS, score.points)}</Text>
+        </View>
+        <View style={styles.squares} accessibilityLabel={t.dailyScore(score.correct, DAILY_ROUNDS, score.points)}>
+          {score.results.map((r, i) => (
+            <View key={i} style={[styles.square, { backgroundColor: r ? colors.green : colors.wrong }]} />
+          ))}
+        </View>
+        <View style={styles.streakRow}>
+          <MaterialCommunityIcons name="fire" size={22} color={colors.green} />
+          <Text style={styles.levelText}>{t.dayStreak(streak)}</Text>
+        </View>
+        <Text style={styles.answer}>{t.dailyBack}</Text>
+        <Button label={t.share} onPress={share} />
+      </View>
+    </View>
   );
 }
 
@@ -578,6 +722,7 @@ function Footer({
   gained,
   streak,
   question,
+  round,
   onNext,
 }: {
   answered: boolean;
@@ -586,6 +731,8 @@ function Footer({
   gained: number;
   streak: number;
   question: Question;
+  /** Map of the day: the question's place among the day's, from 0. */
+  round: { n: number; total: number } | null;
   onNext: () => void;
 }) {
   const { colors, styles } = useThemed();
@@ -598,6 +745,20 @@ function Footer({
     pop.setValue(0);
     Animated.spring(pop, { toValue: 1, friction: 5, tension: 160, useNativeDriver: true }).start();
   }, [answered, pop]);
+
+  if (!answered && round) {
+    return (
+      <View style={styles.levelCard}>
+        <View style={styles.levelRow}>
+          <Text style={styles.levelText}>{t.dailyRound(round.n + 1, round.total)}</Text>
+          <Text style={styles.levelNote}>{t.level(dailyLevel(round.n))}</Text>
+        </View>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${(round.n / round.total) * 100}%` }]} />
+        </View>
+      </View>
+    );
+  }
 
   if (!answered) {
     const level = levelFor(streak);
@@ -625,14 +786,14 @@ function Footer({
     >
       <View>
         <Text style={[styles.verdict, { color: right ? colors.green : colors.wrong }]}>
-          {right ? (isRecord ? t.newRecord : t.correct(gained)) : t.wrong}
+          {right ? (isRecord ? t.newRecord : t.correct(gained)) : round ? t.dailyWrong : t.wrong}
         </Text>
         <Text style={styles.answer} numberOfLines={1}>
           {right ? answerText : t.itWas(answerText)}
           {detail ? ` · ${detail}` : ''}
         </Text>
       </View>
-      <Button label={t.next} onPress={onNext} />
+      <Button label={round && round.n + 1 === round.total ? t.seeResult : t.next} onPress={onNext} />
     </Animated.View>
   );
 }
@@ -673,6 +834,18 @@ const useThemed = themed((colors) => ({
       fontVariant: ['tabular-nums'],
     },
     map: { flex: 1, minHeight: 180 },
+    shape: {
+      ...StyleSheet.absoluteFill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    squares: { flexDirection: 'row', justifyContent: 'center', gap: space(1) },
+    square: { width: 22, height: 22, borderRadius: 6 },
+    streakRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space(2) },
     panel: { paddingTop: space(5), paddingBottom: space(5), gap: space(3) },
     section: { color: colors.textMuted, fontFamily: fonts.bold, fontSize: 15, marginBottom: space(1) },
     modeCard: {

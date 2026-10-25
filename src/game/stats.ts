@@ -20,6 +20,8 @@ export type Tally = { answers: number; correct: number };
 export type Run = { id: number; points: number; streak: number; at: number };
 /** A whole world map painted, misses included in the time. */
 export type MapTime = { ms: number; misses: number; at: number };
+/** A finished map of the day: its points and right answers out of the rounds. */
+export type DailyResult = { day: string; points: number; correct: number; at: number };
 
 export const CONTINENTS = ['Africa', 'Asia', 'Europe', 'North America', 'South America', 'Oceania'] as const;
 export type Continent = (typeof CONTINENTS)[number];
@@ -46,6 +48,10 @@ export type Stats = {
   countryMaps: Record<string, MapTime[]>;
   /** Each country's maps painted, all time, by board id. */
   countryMapsDone: Record<string, number>;
+  /** Best maps of the day. */
+  dailies: DailyResult[];
+  /** Maps of the day finished, all time. */
+  dailiesDone: number;
 };
 
 export function emptyStats(): Stats {
@@ -53,14 +59,16 @@ export function emptyStats(): Stats {
   return {
     days: {},
     continents: tallies,
-    known: { countries: {}, capitals: {} },
-    bestStreak: { countries: 0, capitals: 0 },
-    runs: { countries: [], capitals: [] },
+    known: { countries: {}, capitals: {}, silhouette: {} },
+    bestStreak: { countries: 0, capitals: 0, silhouette: 0 },
+    runs: { countries: [], capitals: [], silhouette: [] },
     maps: [],
     mapsDone: 0,
     regions: { answers: 0, correct: 0 },
     countryMaps: {},
     countryMapsDone: {},
+    dailies: [],
+    dailiesDone: 0,
   };
 }
 
@@ -119,6 +127,14 @@ export function addCountryMap(s: Stats, id: string, map: MapTime): Stats {
     countryMaps: { ...s.countryMaps, [id]: topMaps([...(s.countryMaps[id] ?? []), map]) },
     countryMapsDone: { ...s.countryMapsDone, [id]: (s.countryMapsDone[id] ?? 0) + 1 },
   };
+}
+
+/** Most points first; on a tie, the earlier day keeps its place. */
+export function addDaily(s: Stats, result: DailyResult): Stats {
+  const dailies = [...s.dailies.filter((d) => d.day !== result.day), result]
+    .sort((a, b) => b.points - a.points || a.at - b.at)
+    .slice(0, KEEP_RUNS);
+  return { ...s, dailies, dailiesDone: s.dailiesDone + 1 };
 }
 
 /** Fastest first; on a tie, the earlier map keeps its place. */
@@ -241,3 +257,4 @@ export const trackRun = (mode: Mode, run: Run) => change((s) => addRun(s, mode, 
 export const trackMap = (map: MapTime) => change((s) => addMap(s, map));
 export const trackRegion = (correct: boolean) => change((s) => addRegionAnswer(s, correct, new Date()));
 export const trackCountryMap = (id: string, map: MapTime) => change((s) => addCountryMap(s, id, map));
+export const trackDaily = (result: DailyResult) => change((s) => addDaily(s, result));

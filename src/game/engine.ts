@@ -1,6 +1,6 @@
 import type { Mode } from '@/settings';
 
-import { COUNTRIES, type Country } from './world';
+import { COUNTRIES, SILHOUETTES, type Country } from './world';
 
 export type Question = {
   mode: Mode;
@@ -19,12 +19,19 @@ export const levelFor = (streak: number) => Math.min(MAX_LEVEL, 1 + Math.floor(s
 /** Points for a right answer: harder countries are worth more. */
 export const pointsFor = (q: Question) => q.target.tier * 10;
 
-const playable = (mode: Mode) =>
-  mode === 'capitals' ? COUNTRIES.filter((c) => c.capital) : COUNTRIES;
+/** A source of numbers in [0, 1): Math.random, or a seeded one for the map of the day. */
+export type Random = () => number;
 
-function pickWeighted<T>(items: T[], weight: (t: T) => number) {
+const playable = (mode: Mode) =>
+  mode === 'capitals'
+    ? COUNTRIES.filter((c) => c.capital)
+    : mode === 'silhouette'
+      ? COUNTRIES.filter((c) => SILHOUETTES[c.iso])
+      : COUNTRIES;
+
+function pickWeighted<T>(items: T[], weight: (t: T) => number, random: Random) {
   const total = items.reduce((s, t) => s + weight(t), 0);
-  let r = Math.random() * total;
+  let r = random() * total;
   for (const t of items) {
     r -= weight(t);
     if (r <= 0) return t;
@@ -32,16 +39,16 @@ function pickWeighted<T>(items: T[], weight: (t: T) => number) {
   return items[items.length - 1];
 }
 
-function shuffle<T>(items: T[]) {
+function shuffle<T>(items: T[], random: Random) {
   const a = [...items];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
 }
 
-export function nextQuestion(mode: Mode, streak: number, recent: string[]): Question {
+export function nextQuestion(mode: Mode, streak: number, recent: string[], random: Random = Math.random): Question {
   const level = levelFor(streak);
   const all = playable(mode);
   const skip = new Set(recent.slice(-RECENT));
@@ -49,7 +56,7 @@ export function nextQuestion(mode: Mode, streak: number, recent: string[]): Ques
   if (!pool.length) pool = all.filter((c) => c.tier <= level);
 
   // The newest tier shows up most, older tiers keep appearing.
-  const target = pickWeighted(pool, (c) => (c.tier === level ? 3 : c.tier === level - 1 ? 2 : 1));
+  const target = pickWeighted(pool, (c) => (c.tier === level ? 3 : c.tier === level - 1 ? 2 : 1), random);
 
   // Distractors get closer to the answer as the level climbs: same region,
   // similar difficulty. Early on they stay among well-known countries.
@@ -57,7 +64,7 @@ export function nextQuestion(mode: Mode, streak: number, recent: string[]): Ques
   const candidates = all
     .filter((c) => c.iso !== target.iso && c.tier <= Math.max(level, target.tier) + 1)
     .map((c) => {
-      let score = Math.random() * 2;
+      let score = random() * 2;
       if (c.region === target.region) score += near ? 4 : 2;
       else if (c.continent === target.continent) score += near ? 2 : 1.5;
       if (Math.abs(c.tier - target.tier) <= 1) score += 1;
@@ -66,7 +73,7 @@ export function nextQuestion(mode: Mode, streak: number, recent: string[]): Ques
     .sort((a, b) => b.score - a.score);
   const distractors = candidates.slice(0, 2).map((x) => x.c);
 
-  const options = shuffle([target, ...distractors]);
+  const options = shuffle([target, ...distractors], random);
   return { mode, target, options, answer: options.indexOf(target) };
 }
 
