@@ -53,6 +53,12 @@ const PULSE = 1600;
 const FADE = 500;
 /** How long a painted or mistaken country stays lit. */
 const FLASH = 900;
+/**
+ * Places still to paint this few pixels across are drawn again over the
+ * painted rings, so a painted neighbour's ring can't cover them (Palestine's
+ * over Israel) and make them look done.
+ */
+const UNDER_RINGS = 24;
 /** A touch that moves less than this many pixels is a tap. */
 const TAP_SLOP = 8;
 /** How far the player can zoom in, as a frame width in map units. */
@@ -125,12 +131,25 @@ type Touch = { x: number; y: number };
 const touchesOf = (e: GestureResponderEvent): Touch[] =>
   Array.from(e.nativeEvent.touches ?? [], (t) => ({ x: t.pageX, y: t.pageY }));
 
-// Each map's colours and tiny places, worked out once.
-const extras = new WeakMap<Board, { colorOf: Map<string | null, number>; tiny: Place[] }>();
+// Each map's colours, tiny places and the outlines of the other places,
+// worked out once.
+type Extras = {
+  colorOf: Map<string | null, number>;
+  tiny: Place[];
+  outlines: { iso: string; d: string; size: number }[];
+};
+const extras = new WeakMap<Board, Extras>();
 function extrasFor(b: Board) {
   let e = extras.get(b);
   if (!e) {
-    e = { colorOf: new Map(b.shapes.map((l) => [l.iso, l.c])), tiny: b.regions.filter((r) => r.tiny) };
+    const d = new Map(b.shapes.map((l) => [l.iso, l.d]));
+    e = {
+      colorOf: new Map(b.shapes.map((l) => [l.iso, l.c])),
+      tiny: b.regions.filter((r) => r.tiny),
+      outlines: b.regions
+        .filter((r) => !r.tiny && d.has(r.iso))
+        .map((r) => ({ iso: r.iso, d: d.get(r.iso)!, size: Math.max(r.box[2], r.box[3]) })),
+    };
     extras.set(b, e);
   }
   return e;
@@ -391,7 +410,7 @@ export function WorldMap({ board = WORLD_BOARD, focus, mode, status, paint, mark
     () => (flash ? board.shapes.find((l) => l.iso === flash.iso) : undefined),
     [flash, board],
   );
-  const { colorOf, tiny } = extrasFor(board);
+  const { colorOf, tiny, outlines } = extrasFor(board);
   const marked = useMemo(
     () =>
       (marks?.marks ?? []).flatMap((m) => {
@@ -475,23 +494,47 @@ export function WorldMap({ board = WORLD_BOARD, focus, mode, status, paint, mark
             )}
             {tiles.map(([x, y]) => (
               <G key={`${x} ${y}`} transform={`translate(${x} ${y})`}>
-                {/* Tiny countries get a ring to tap, filled in once painted. */}
+                {/* Tiny countries get a ring to tap, filled in once painted.
+                    Places still to find go on top: islands a pixel apart
+                    (Antigua and Saint Kitts) or a small country under a
+                    neighbour's ring would otherwise look painted already. */}
                 {paint &&
-                  tiny.map((t) => {
-                    const done = paint.filled.has(t.iso);
-                    return (
+                  tiny
+                    .filter((t) => paint.filled.has(t.iso))
+                    .map((t) => (
                       <Circle
                         key={t.iso}
                         cx={t.center[0]}
                         cy={t.center[1]}
-                        r={(done ? 5 : 7) * px}
-                        fill={done ? c.land[colorOf.get(t.iso) ?? 0] : c.blank}
-                        fillOpacity={done ? 1 : 0.5}
-                        stroke={done ? c.landStroke : c.blankRing}
+                        r={5 * px}
+                        fill={c.land[colorOf.get(t.iso) ?? 0]}
+                        stroke={c.landStroke}
                         strokeWidth={1.5 * px}
                       />
-                    );
-                  })}
+                    ))}
+                {paint && (
+                  <G fill={c.blank} stroke={c.landStroke} strokeWidth={1.1 * px} strokeLinejoin="round">
+                    {outlines
+                      .filter((o) => o.size / px < UNDER_RINGS && !paint.filled.has(o.iso))
+                      .map((o) => (
+                        <Path key={o.iso} d={o.d} />
+                      ))}
+                  </G>
+                )}
+                {paint &&
+                  tiny
+                    .filter((t) => !paint.filled.has(t.iso))
+                    .map((t) => (
+                      <Circle
+                        key={t.iso}
+                        cx={t.center[0]}
+                        cy={t.center[1]}
+                        r={7 * px}
+                        fill={c.blank}
+                        stroke={c.blankRing}
+                        strokeWidth={1.5 * px}
+                      />
+                    ))}
                 {marks &&
                   tiny.map((t) => (
                     <Circle
