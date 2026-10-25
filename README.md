@@ -41,7 +41,7 @@ npx expo start        # then press i, a or w
 - `src/game/complete.ts`, `src/game/useCompleteGame.ts`: Complete the map, on any `Board` (the world or a country).
 - `src/game/countries.ts`: the countries you can complete, loaded only when played.
 - `src/data/world.json`, `src/data/regions/*.json`: generated map data; don't edit by hand.
-- `src/cloud/`: Supabase: the client, the projects (`config.ts`), the account (`account.ts`) and ranked games, leagues and groups (`ranked.ts`). `src/app/ranked.tsx` and `src/components/RankedGame.tsx`: the Ranked screen; `src/components/OnlineRanking.tsx`: the league and standings in the Ranking tab. `supabase/migrations/`: the database tables and security rules.
+- `src/cloud/`: Supabase: the client, the projects (`config.ts`), the account (`account.ts`), ranked games, leagues and groups (`ranked.ts`) and duels (`duels.ts`). `src/app/ranked.tsx` and `src/components/RankedGame.tsx`: the Ranked screen; `src/components/OnlineRanking.tsx`: the league and standings in the Ranking tab. `src/app/duels/`, `src/app/play-duel.tsx`, `src/app/duel/[code].tsx`: the duel screens. `supabase/migrations/`: the database tables and security rules.
 
 ## Map data
 
@@ -127,6 +127,17 @@ new migration, or ranked games will refuse to start ("there's a new version"):
 node scripts/build-ranked-places.mjs
 npx supabase db push
 ```
+
+### Duels
+
+**Duelos / Duels** are asynchronous, as in Vocablo
+(`supabase/migrations/*_duels.sql`). Both players get the same 10 questions
+(the same places and options, from level 1 to 5) and each plays whenever they
+can within 48 hours. Whoever gets more right wins; ties go to more points,
+then less total time, and the winner's points count for their league. A duel
+starts by challenging a player by name, sharing a link
+(`atlasgo://duel/CODE`) or its code, or asking for a random rival. Each
+player's game is a server-run Ranked game, so the same rules apply.
 
 ## Sounds
 

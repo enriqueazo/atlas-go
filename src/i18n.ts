@@ -1,5 +1,7 @@
 import { getLocales } from 'expo-localization';
 
+import type { Duel } from '@/game/duels';
+
 export type Lang = 'es' | 'en';
 
 const es = {
@@ -179,6 +181,74 @@ const es = {
   groupInvite: (name: string, code: string) =>
     `Únete a mi grupo «${name}» en Atlas Go: Ranking › Grupos › Unirme con código, con el código ${code}`,
   yourGames: 'Tus partidas en este móvil',
+  modeDuels: 'Duelos',
+  modeDuelsDesc: (n: number) =>
+    `Reta a alguien: los dos jugáis las mismas ${n} preguntas, cada uno cuando pueda, y gana quien acierte más.`,
+  duelsToPlay: (n: number) => `Te toca en ${n}`,
+  newDuel: 'Nuevo duelo',
+  newDuelBody: (n: number, hours: number) =>
+    `Los dos jugáis las mismas ${n} preguntas, cada uno cuando pueda (tenéis ${hours} horas). Gana quien acierte más; si empatáis, quien sume más puntos y después quien tarde menos. Los puntos del ganador cuentan para su liga.`,
+  challengePlayer: 'Retar a un jugador',
+  theirName: 'Su nombre',
+  challenge: 'Retar',
+  randomRival: 'Rival al azar',
+  shareLink: 'Compartir enlace',
+  gotCode: '¿Te han pasado un código?',
+  lookingForRival: 'Buscando rival. Mientras tanto, ya puedes jugar tu parte en «Te toca».',
+  duelsEmpty: (n: number) =>
+    `Aún no tienes duelos. Reta a alguien: los dos jugáis las mismas ${n} preguntas y gana quien acierte más.`,
+  sectionToPlay: 'Te toca',
+  sectionWaiting: 'Esperando',
+  sectionFinished: 'Terminados',
+  linkDuel: 'Duelo por enlace',
+  codeChip: (code: string) => `Código ${code}`,
+  timeLeft: (minutes: number) =>
+    minutes < 1 ? 'queda menos de 1 min' : minutes < 60 ? `quedan ${minutes} min` : `quedan ${Math.floor(minutes / 60)} h`,
+  duelStatus: (d: Duel, left: string) => {
+    if (d.status === 'declined') return d.mine ? 'Rechazado' : 'Lo rechazaste';
+    if (d.status === 'expired') return 'Caducado: nadie jugó a tiempo';
+    if (d.status === 'done') {
+      if (d.result === 'won') return d.them.played ? '¡Ganaste!' : '¡Ganaste! Tu rival no jugó a tiempo';
+      if (d.result === 'lost') return d.me.played ? 'Perdiste' : 'Perdiste: no jugaste a tiempo';
+      return 'Empate';
+    }
+    if (d.to_play) return d.me.started ? `Partida a medias · ${left}` : `Te toca · ${left}`;
+    if (!d.rival) return d.kind === 'random' ? `Buscando rival · ${left}` : `Esperando a que alguien acepte · ${left}`;
+    return `Esperando a ${d.rival} · ${left}`;
+  },
+  duelTitle: 'Duelo',
+  playDuel: (n: number) => `Jugar mis ${n} preguntas`,
+  keepPlaying: 'Seguir jugando',
+  shareCodeBody: 'Comparte el enlace o dale este código a quien quieras retar. El primero que lo abra será tu rival.',
+  declineDuel: 'Rechazar el duelo',
+  cancelDuel: 'Cancelar el duelo',
+  byQuestion: 'Pregunta a pregunta',
+  youCol: 'Tú',
+  rivalCol: 'Rival',
+  timeCol: 'Tiempo',
+  duelGone: 'Este duelo ya no está en tu lista.',
+  duelShare: (link: string, code: string) =>
+    `¡Te reto a un duelo de geografía en Atlas Go! Abre ${link} o escribe el código ${code} en Duelos.`,
+  joinDuelFailed: 'No se pudo aceptar el duelo',
+  joiningDuel: 'Aceptando el duelo…',
+  seeDuels: 'Ver mis duelos',
+  seeDuel: 'Ver el duelo',
+  leaguePoints: (n: number) => `+${n} puntos para tu liga`,
+  hasPlayed: 'Ya jugó',
+  notPlayed: 'Sin jugar',
+  ptsTime: (pts: number, time: string) => `${pts} pts · ${time}`,
+  rivalHidden: 'Las respuestas de tu rival se verán cuando termine el duelo.',
+  duelError: (code: string) =>
+    ({
+      player_not_found: 'No hay ningún jugador con ese nombre.',
+      own_duel: 'No puedes retarte a ti mismo.',
+      duel_not_found: 'No hay ningún duelo con ese código.',
+      duel_taken: 'Otra persona ya aceptó ese duelo.',
+      duel_expired: 'Ese duelo ya terminó.',
+      duel_over: 'Ese duelo ya terminó.',
+      already_played: 'Ya jugaste este duelo.',
+      too_many_duels: 'Tienes demasiados duelos abiertos. Termina alguno antes de empezar otro.',
+    })[code],
 
   progressTitle: 'Progreso',
   progressEmpty: 'Juega tu primera partida para ver aquí tu progreso.',
@@ -437,6 +507,74 @@ const en: Strings = {
   groupInvite: (name: string, code: string) =>
     `Join my group “${name}” on Atlas Go: Ranking › Groups › Join with a code, with the code ${code}`,
   yourGames: 'Your games on this phone',
+  modeDuels: 'Duels',
+  modeDuelsDesc: (n: number) =>
+    `Challenge someone: you both play the same ${n} questions, whenever you can, and whoever gets more right wins.`,
+  duelsToPlay: (n: number) => `Your turn in ${n}`,
+  newDuel: 'New duel',
+  newDuelBody: (n: number, hours: number) =>
+    `You both play the same ${n} questions, whenever you can (you have ${hours} hours). Whoever gets more right wins; on a tie, more points, then less time. The winner’s points count for their league.`,
+  challengePlayer: 'Challenge a player',
+  theirName: 'Their name',
+  challenge: 'Challenge',
+  randomRival: 'Random rival',
+  shareLink: 'Share a link',
+  gotCode: 'Got a code?',
+  lookingForRival: 'Looking for a rival. Meanwhile, you can already play your part under “Your turn”.',
+  duelsEmpty: (n: number) =>
+    `No duels yet. Challenge someone: you both play the same ${n} questions and whoever gets more right wins.`,
+  sectionToPlay: 'Your turn',
+  sectionWaiting: 'Waiting',
+  sectionFinished: 'Finished',
+  linkDuel: 'Link duel',
+  codeChip: (code: string) => `Code ${code}`,
+  timeLeft: (minutes: number) =>
+    minutes < 1 ? 'under 1 min left' : minutes < 60 ? `${minutes} min left` : `${Math.floor(minutes / 60)} h left`,
+  duelStatus: (d: Duel, left: string) => {
+    if (d.status === 'declined') return d.mine ? 'Declined' : 'You declined it';
+    if (d.status === 'expired') return 'Expired: nobody played in time';
+    if (d.status === 'done') {
+      if (d.result === 'won') return d.them.played ? 'You won!' : 'You won! Your rival didn’t play in time';
+      if (d.result === 'lost') return d.me.played ? 'You lost' : 'You lost: you didn’t play in time';
+      return 'A draw';
+    }
+    if (d.to_play) return d.me.started ? `Half played · ${left}` : `Your turn · ${left}`;
+    if (!d.rival) return d.kind === 'random' ? `Looking for a rival · ${left}` : `Waiting for someone to accept · ${left}`;
+    return `Waiting for ${d.rival} · ${left}`;
+  },
+  duelTitle: 'Duel',
+  playDuel: (n: number) => `Play my ${n} questions`,
+  keepPlaying: 'Keep playing',
+  shareCodeBody: 'Share the link or give this code to whoever you want to challenge. The first to open it is your rival.',
+  declineDuel: 'Decline the duel',
+  cancelDuel: 'Cancel the duel',
+  byQuestion: 'Question by question',
+  youCol: 'You',
+  rivalCol: 'Rival',
+  timeCol: 'Time',
+  duelGone: 'This duel is no longer on your list.',
+  duelShare: (link: string, code: string) =>
+    `I challenge you to a geography duel on Atlas Go! Open ${link} or type the code ${code} in Duels.`,
+  joinDuelFailed: 'Couldn’t accept the duel',
+  joiningDuel: 'Accepting the duel…',
+  seeDuels: 'See my duels',
+  seeDuel: 'See the duel',
+  leaguePoints: (n: number) => `+${n} points for your league`,
+  hasPlayed: 'Played',
+  notPlayed: 'Not played',
+  ptsTime: (pts: number, time: string) => `${pts} pts · ${time}`,
+  rivalHidden: 'Your rival’s answers show once the duel is over.',
+  duelError: (code: string) =>
+    ({
+      player_not_found: 'There’s no player with that name.',
+      own_duel: 'You can’t challenge yourself.',
+      duel_not_found: 'There’s no duel with that code.',
+      duel_taken: 'Someone else already accepted that duel.',
+      duel_expired: 'That duel is over.',
+      duel_over: 'That duel is over.',
+      already_played: 'You already played this duel.',
+      too_many_duels: 'You have too many open duels. Finish one before starting another.',
+    })[code],
 
   progressTitle: 'Progress',
   progressEmpty: 'Play your first game to see your progress here.',
