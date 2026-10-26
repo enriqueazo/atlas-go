@@ -3,9 +3,10 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, AppState, useColorScheme, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { syncWallet } from '@/cloud/wallet';
 import { SettingsProvider, useSettings } from '@/settings';
 import { PALETTES, ThemeProvider, useTheme } from '@/theme';
 
@@ -28,6 +29,16 @@ function Screens() {
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => {});
   }, [ready]);
+
+  // Sends the hints and discards used offline and reads the wallet back, when
+  // the app opens and each time it comes back to the front.
+  useEffect(() => {
+    syncWallet();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') syncWallet();
+    });
+    return () => sub.remove();
+  }, []);
 
   if (!ready) return <Loading />;
 

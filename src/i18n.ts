@@ -326,6 +326,69 @@ const es = {
   credits: 'Mapa: Natural Earth, de dominio público. Banderas: flag-icons, licencia MIT.',
   creditsLink: 'Ver Natural Earth',
   version: (v: string) => `Versión ${v}`,
+  shop: 'Tienda',
+  shopLabel: (hints: number, discards: number) => `Tienda. Tienes ${hints} pistas y ${discards} descartes`,
+  shopTest: 'Tienda de prueba: no se cobra nada y los anuncios son de mentira.',
+  shopLocal: 'Mientras el juego en línea no esté activado, tu reserva se guarda solo en este móvil.',
+  walletTitle: 'Tu reserva',
+  hintsUnit: (n: number): string => (n === 1 ? 'pista' : 'pistas'),
+  discardsUnit: (n: number): string => (n === 1 ? 'descarte' : 'descartes'),
+  walletHow:
+    'Una pista te dice dónde mirar: el mapa detrás de la bandera o la silueta, la capital del país, el país de la capital o dónde está el sitio en Completa el mapa. Un descarte quita una opción incorrecta, o un nombre que no es vecino. En las preguntas de tres opciones, un acierto con ayuda vale la mitad.',
+  walletWhere: 'Se usan en los modos en solitario. En Clasificatoria, en los duelos y en el Mapa del día no.',
+  giftTitle: 'Regalo diario',
+  giftDetail: (n: number) => `+${n} ${n === 1 ? 'descarte' : 'descartes'} cada día que juegas`,
+  giftCollect: 'Recoger',
+  giftLater: 'Vuelve mañana',
+  giftDone: (n: number) => `Regalo recogido: +${n} ${n === 1 ? 'descarte' : 'descartes'}.`,
+  giftToday: (n: number) => `Regalo de hoy: +${n} ${n === 1 ? 'descarte' : 'descartes'}. Úsalo en los modos en solitario.`,
+  adTitle: 'Mira un anuncio',
+  adFreeTitle: 'Pista gratis',
+  adDetail: (n: number, left: number, perDay: number) => `+${n} ${n === 1 ? 'pista' : 'pistas'} · ${left} de ${perDay} hoy`,
+  adWatch: 'Ver',
+  adReceive: 'Recibir',
+  adLater: 'Mañana hay más',
+  adDone: (n: number) => `+${n} ${n === 1 ? 'pista' : 'pistas'}.`,
+  packs: 'Packs',
+  bought: 'Comprado',
+  products: {
+    hints_10: { title: '10 pistas', detail: 'Te dicen dónde mirar' },
+    hints_50: { title: '50 pistas', detail: 'Te dicen dónde mirar' },
+    discards_10: { title: '10 descartes', detail: 'Quitan una opción incorrecta' },
+    discards_50: { title: '50 descartes', detail: 'Quitan una opción incorrecta' },
+    no_ads: { title: 'Sin anuncios', detail: 'Las pistas de los anuncios, sin ver anuncios' },
+  },
+  testPurchase: 'Compra de prueba',
+  testPurchaseBody: (price: string) => `${price} en la tienda de verdad. Ahora es una prueba: no se cobra nada.`,
+  buy: 'Comprar',
+  purchaseDone: (title: string) => `Compra de prueba hecha: ${title.toLowerCase()}.`,
+  restoreLater: 'Restaurar compras y los precios de tu país llegarán con la tienda de verdad.',
+  shopError: (code: string, adsPerDay: number) =>
+    code === 'ad_limit'
+      ? `Ya has visto ${adsPerDay} anuncios hoy. Mañana hay más.`
+      : code === 'shop_closed'
+        ? 'La tienda aún no está abierta.'
+        : code === 'unknown_product'
+          ? 'Ese producto ya no existe.'
+          : code === 'bad_day'
+            ? 'La fecha del móvil no parece correcta.'
+            : 'Necesitas conexión para la tienda.',
+  testAdTitle: 'Anuncio de prueba',
+  testAdBody: 'Aquí irá un anuncio de Google. En esta versión de prueba no se muestra ninguno.',
+  testAdIn: (s: number) => `Recompensa en ${s} s`,
+  testAdGet: 'Recibir la pista',
+  testAdClose: 'Cerrar sin recompensa',
+  boostHint: 'Pista',
+  boostDiscard: 'Descartar una',
+  boostShowMe: 'Muéstramelo',
+  boostEmpty: 'Tienda',
+  boostLabel: (what: string, left: number, half: boolean) =>
+    `${what}. De tu reserva quedan ${left}${half ? '. Vale la mitad de puntos' : ''}`,
+  boostEmptyLabel: (what: string) => `${what}: no te quedan. Abrir la tienda`,
+  hintCapital: (capital: string) => `Pista: su capital es ${capital}.`,
+  hintCountry: (country: string) => `Pista: es la capital de ${country}.`,
+  hintMap: 'Pista: el mapa te enseña dónde está.',
+  helpedPoints: 'Con ayuda · mitad de puntos',
 };
 
 export type Strings = typeof es;
@@ -652,6 +715,69 @@ const en: Strings = {
   credits: 'Map: Natural Earth, public domain. Flags: flag-icons, MIT license.',
   creditsLink: 'See Natural Earth',
   version: (v: string) => `Version ${v}`,
+  shop: 'Shop',
+  shopLabel: (hints: number, discards: number) => `Shop. You have ${hints} hints and ${discards} discards`,
+  shopTest: 'Test shop: nothing is charged and the ads are pretend.',
+  shopLocal: 'Until online play is switched on, your stash is saved on this phone only.',
+  walletTitle: 'Your stash',
+  hintsUnit: (n: number) => (n === 1 ? 'hint' : 'hints'),
+  discardsUnit: (n: number) => (n === 1 ? 'discard' : 'discards'),
+  walletHow:
+    'A hint tells you where to look: the map behind the flag or the silhouette, the country’s capital, the capital’s country, or where the place is in Complete the map. A discard takes away a wrong option, or a name that isn’t a neighbour. In three-option questions, a right answer with help is worth half.',
+  walletWhere: 'They work in the solo modes. Not in Ranked, duels or the Map of the day.',
+  giftTitle: 'Daily gift',
+  giftDetail: (n: number) => `+${n} ${n === 1 ? 'discard' : 'discards'} each day you play`,
+  giftCollect: 'Collect',
+  giftLater: 'Come back tomorrow',
+  giftDone: (n: number) => `Gift collected: +${n} ${n === 1 ? 'discard' : 'discards'}.`,
+  giftToday: (n: number) => `Today’s gift: +${n} ${n === 1 ? 'discard' : 'discards'}. Use it in the solo modes.`,
+  adTitle: 'Watch an ad',
+  adFreeTitle: 'Free hint',
+  adDetail: (n: number, left: number, perDay: number) => `+${n} ${n === 1 ? 'hint' : 'hints'} · ${left} of ${perDay} today`,
+  adWatch: 'Watch',
+  adReceive: 'Get',
+  adLater: 'More tomorrow',
+  adDone: (n: number) => `+${n} ${n === 1 ? 'hint' : 'hints'}.`,
+  packs: 'Packs',
+  bought: 'Bought',
+  products: {
+    hints_10: { title: '10 hints', detail: 'They tell you where to look' },
+    hints_50: { title: '50 hints', detail: 'They tell you where to look' },
+    discards_10: { title: '10 discards', detail: 'They take away a wrong option' },
+    discards_50: { title: '50 discards', detail: 'They take away a wrong option' },
+    no_ads: { title: 'No ads', detail: 'The hints from ads, without watching ads' },
+  },
+  testPurchase: 'Test purchase',
+  testPurchaseBody: (price: string) => `${price} in the real store. This is a test: nothing is charged.`,
+  buy: 'Buy',
+  purchaseDone: (title: string) => `Test purchase done: ${title.toLowerCase()}.`,
+  restoreLater: 'Restoring purchases and your country’s prices will come with the real store.',
+  shopError: (code: string, adsPerDay: number) =>
+    code === 'ad_limit'
+      ? `You’ve watched ${adsPerDay} ads today. More tomorrow.`
+      : code === 'shop_closed'
+        ? 'The shop isn’t open yet.'
+        : code === 'unknown_product'
+          ? 'That product no longer exists.'
+          : code === 'bad_day'
+            ? 'The phone’s date doesn’t look right.'
+            : 'You need a connection for the shop.',
+  testAdTitle: 'Test ad',
+  testAdBody: 'A Google ad will go here. This test version doesn’t show any.',
+  testAdIn: (s: number) => `Reward in ${s} s`,
+  testAdGet: 'Get the hint',
+  testAdClose: 'Close without reward',
+  boostHint: 'Hint',
+  boostDiscard: 'Discard one',
+  boostShowMe: 'Show me',
+  boostEmpty: 'Shop',
+  boostLabel: (what: string, left: number, half: boolean) =>
+    `${what}. ${left} left in your stash${half ? '. Worth half the points' : ''}`,
+  boostEmptyLabel: (what: string) => `${what}: none left. Open the shop`,
+  hintCapital: (capital: string) => `Hint: its capital is ${capital}.`,
+  hintCountry: (country: string) => `Hint: it’s the capital of ${country}.`,
+  hintMap: 'Hint: the map shows you where it is.',
+  helpedPoints: 'With help · half the points',
 };
 
 export const strings: Record<Lang, Strings> = { es, en };
