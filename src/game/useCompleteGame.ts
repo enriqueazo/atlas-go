@@ -20,11 +20,13 @@ export type Note =
  * Complete the map: name a place, the player taps it to paint it. Wrong taps
  * light up what was tapped, and after a few the map shows where it is. The
  * clock runs while the mode is open, and each wrong tap adds to it: the goal
- * is the whole map in the least time.
+ * is the whole map in the least time. A hint from the wallet shows it right away.
  */
 export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoardProgress>, play: (cue: Cue) => void) {
   const [target, setTarget] = useState<Place | null>(null);
   const [misses, setMisses] = useState(0);
+  // A hint from the wallet showed where the place is.
+  const [shown, setShown] = useState(false);
   const [flash, setFlash] = useState<Flash | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const skipped = useRef<string[]>([]);
@@ -58,6 +60,7 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
   const pick = (filled: ReadonlySet<string>) => {
     setTarget(nextTarget(board, filled, skipped.current));
     setMisses(0);
+    setShown(false);
   };
 
   const start = () => {
@@ -86,8 +89,8 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
       const time = progress.ms + (since.current === null ? 0 : now - since.current) + progress.misses * MISS_PENALTY;
       bank(!last);
       progress.fill(target.iso);
-      // Found on the first tap counts as known, for the Progress tab.
-      track(misses === 0);
+      // Found on the first tap, without a hint, counts as known, for the Progress tab.
+      track(misses === 0 && !shown);
       setFlash({ iso: target.iso, kind: 'right', at: now });
       setNote({ kind: 'right', iso: target.iso });
       if (last) {
@@ -116,10 +119,17 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
   const skip = () => {
     if (!target) return;
     play('tap');
-    if (misses > 0) track(false);
+    if (misses > 0 || shown) track(false);
     skipped.current = [...skipped.current, target.iso];
     setNote(null);
     pick(progress.filled);
+  };
+
+  /** Shows where the place is, as after a few misses. The caller pays for it from the wallet first. */
+  const showMe = () => {
+    if (!target || shown || misses >= MISSES_TO_REVEAL) return;
+    setShown(true);
+    play('help');
   };
 
   const restart = () => {
@@ -142,7 +152,7 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
     flash,
     note,
     /** Missed too often: the map shows where the place is. */
-    revealed: misses >= MISSES_TO_REVEAL,
+    revealed: shown || misses >= MISSES_TO_REVEAL,
     done: !target && progress.filled.size >= progress.total,
     /** The finished map beat an earlier best time. */
     record,
@@ -152,6 +162,7 @@ export function useCompleteGame(board: Board, progress: ReturnType<typeof useBoa
     stop,
     tap,
     skip,
+    showMe,
     restart,
   };
 }

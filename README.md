@@ -48,6 +48,7 @@ The app is linked to the EAS project `atlas-go` on the `enriqueazos-team` accoun
 - `src/game/countries.ts`: the countries you can complete, loaded only when played.
 - `src/data/world.json`, `src/data/regions/*.json`: generated map data; don't edit by hand.
 - `src/cloud/`: Supabase: the client, the projects (`config.ts`), the account (`account.ts`), ranked games, leagues and groups (`ranked.ts`) and duels (`duels.ts`). `src/app/ranked.tsx` and `src/components/RankedGame.tsx`: the Ranked screen; `src/components/OnlineRanking.tsx`: the league and standings in the Ranking tab. `src/app/duels/`, `src/app/play-duel.tsx`, `src/app/duel/[code].tsx`: the duel screens. `supabase/migrations/`: the database tables and security rules.
+- `src/app/shop.tsx`, `src/cloud/wallet.ts`, `src/game/shop.ts`: the shop and the wallet of hints and discards; `src/components/Boosts.tsx`: the help buttons in the games; `src/components/TestAd.tsx`: the stand-in ad.
 
 ## Map data
 
@@ -144,6 +145,30 @@ then less total time, and the winner's points count for their league. A duel
 starts by challenging a player by name, sharing a link
 (`atlasgo://duel/CODE`) or its code, or asking for a random rival. Each
 player's game is a server-run Ranked game, so the same rules apply.
+
+## Shop
+
+**Tienda / Shop** works like Vocablo's (`supabase/migrations/*_wallet_and_shop.sql`):
+open it from the hints-and-discards chip in the lobby, or from a help button
+with none left. Each player has a wallet on the server, and the phone keeps a
+copy so solo games can use it offline.
+
+- **Hints** show where to look: the capital of the country (Countries), the
+  country of the capital (Capitals), the map behind the flag or silhouette
+  (Flags, Silhouettes), or where the place is (Complete the map, Complete a
+  country).
+- **Discards** take one wrong option away (quiz modes), or one name that
+  isn't a neighbour (Neighbours).
+- A right answer with help in a three-option question is worth half.
+  Ranked, duels and the map of the day never use the wallet.
+- The wallet fills up with a daily gift (1 discard), test ads (1 hint, 5 a
+  day) and test packs (10 or 50 hints or discards, and No ads). Nothing is
+  charged: real purchases need the App Store and Play accounts, and real ads
+  need AdMob in a new development build. Turn test purchases off before the
+  real launch: `update private.shop_config set test_purchases = false;`
+
+Until a Supabase project is set up, the wallet lives on the phone alone with
+the same rules, so the shop can be tried in Expo Go.
 
 ## Sounds
 

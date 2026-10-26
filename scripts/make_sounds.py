@@ -63,4 +63,6 @@ save("zoom", mix([(0, bell(NOTES["C5"], 0.35, gain=0.25, glide_to=NOTES["C6"])[1
 save("record", mix([note("C5", 0, 0.3), note("E5", 0.1, 0.3), note("G5", 0.2, 0.3),
                     note("C6", 0.32, 0.6), note("E6", 0.32, 0.6, gain=0.3),
                     note("G6", 0.32, 0.6, gain=0.25)], 0.95))
+# A soft two-note sparkle when a hint or a discard is used.
+save("help", mix([note("G6", 0, 0.12, gain=0.3), note("C7", 0.06, 0.2, gain=0.25)], 0.26))
 print("sounds written to", OUT)

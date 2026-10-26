@@ -5,6 +5,8 @@ import { Animated, BackHandler, Pressable, ScrollView, Share, StyleSheet, Text, 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CLOUD_READY } from '@/cloud/config';
+import { claimGiftIfDue, spendFromWallet, useWallet } from '@/cloud/wallet';
+import { BoostButton, Boosts } from '@/components/Boosts';
 import { OptionCard, type OptionStatus } from '@/components/OptionCard';
 import { Flag } from '@/components/Flag';
 import { Silhouette } from '@/components/Silhouette';
@@ -31,6 +33,7 @@ import {
 import { levelFor, MAX_LEVEL, nextQuestion, optionLabel, PER_LEVEL, pointsFor, type Question } from '@/game/engine';
 import { RANKED_ROUNDS, RANKED_SECONDS } from '@/game/leagues';
 import { loadSaved, useBoardProgress } from '@/game/progress';
+import { GIFT_DISCARDS, helpedPoints, type Boost } from '@/game/shop';
 import { dayKey, trackAnswer, trackDaily, trackRun } from '@/game/stats';
 import { useCompleteGame } from '@/game/useCompleteGame';
 import { LIVES, useNeighboursGame } from '@/game/useNeighboursGame';
@@ -64,6 +67,12 @@ export default function Game() {
   const [streak, setStreak] = useState(0);
   const [gained, setGained] = useState(0);
   const [isRecord, setIsRecord] = useState(false);
+  // Help from the wallet on this question: the hint shown, the option discarded.
+  const [hinted, setHinted] = useState(false);
+  const [discarded, setDiscarded] = useState<number[]>([]);
+  const wallet = useWallet();
+  // Today's gift was just given, for the lobby's banner.
+  const [gift, setGift] = useState(false);
   const recent = useRef<string[]>([]);
   // Whether this run already passed the record, so the fanfare plays once.
   const celebrated = useRef(false);
@@ -107,6 +116,7 @@ export default function Game() {
     let live = true;
     setDay(dayKey(new Date()));
     getDaily().then((r) => live && setDaily(r));
+    claimGiftIfDue().then((given) => live && given && setGift(true));
     return () => {
       live = false;
     };
@@ -152,6 +162,8 @@ export default function Game() {
     recent.current = [...recent.current.slice(-40), q.target.iso];
     setQuestion(q);
     setPicked(null);
+    setHinted(false);
+    setDiscarded([]);
   };
 
   const start = (m: Play) => {
@@ -245,7 +257,7 @@ export default function Game() {
     setPicked(i);
     trackAnswer({ mode: quiz, iso: question.target.iso, correct: i === question.answer });
     if (i === question.answer) {
-      const pts = pointsFor(question);
+      const pts = helpedPoints(pointsFor(question), hinted || discarded.length > 0);
       const total = points + pts;
       const beat = total > records[quiz];
       const fanfare = beat && !celebrated.current && records[quiz] > 0;
@@ -270,6 +282,34 @@ export default function Game() {
     }
   };
 
+  /** Pays for help from the wallet; false (and nothing happens) when there's none left. */
+  const pay = async (boost: Boost) => {
+    if (!(await spendFromWallet(boost))) return false;
+    play('help');
+    return true;
+  };
+
+  const showHint = async () => {
+    if (!question || !quiz || answered || hinted || !hintFor(question)) return;
+    if (await pay('hint')) setHinted(true);
+  };
+
+  const discard = async () => {
+    if (!question || !quiz || answered || !canDiscard) return;
+    const wrong = question.options.map((_, i) => i).filter((i) => i !== question.answer && !discarded.includes(i));
+    if (await pay('discard')) setDiscarded([...discarded, wrong[Math.floor(Math.random() * wrong.length)]]);
+  };
+
+  const showMe = async () => {
+    if (!game.target || game.revealed) return;
+    if (await spendFromWallet('hint')) game.showMe();
+  };
+
+  const discardName = async () => {
+    if (!neighbours.canDiscard) return;
+    if (await spendFromWallet('discard')) neighbours.discard();
+  };
+
   const next = () => {
     if (isDaily) {
       const n = dayPicks.length;
@@ -286,6 +326,20 @@ export default function Game() {
   const answered = picked !== null;
   const right = answered && picked === question?.answer;
   const status = !answered ? 'ask' : right ? 'right' : 'wrong';
+  // What a hint says: the capital of the country, the country of the capital,
+  // or (behind a flag or a silhouette) the map itself. Null when there's none.
+  const hintFor = (q: Question) =>
+    q.mode === 'countries'
+      ? q.target.capital
+        ? t.hintCapital(q.target.capital[language])
+        : null
+      : q.mode === 'capitals'
+        ? t.hintCountry(q.target[language])
+        : t.hintMap;
+  // One option can go: two are always left to choose from.
+  const canDiscard = !!question && question.options.length - 1 - discarded.length >= 2;
+  // The wallet helps in the solo quiz modes, not in the map of the day.
+  const helps = quiz !== null && !isDaily && !!question;
   const prompt = (q: Question) =>
     q.mode === 'capitals'
       ? t.askCapital
@@ -295,7 +349,8 @@ export default function Game() {
           ? t.askFlag
           : t.askCountry;
   // A silhouette or a flag hides the map until it is answered, then the map shows where it is.
-  const cover = (question?.mode === 'silhouette' || question?.mode === 'flags') && !answered ? question : null;
+  const cover =
+    (question?.mode === 'silhouette' || question?.mode === 'flags') && !answered && !(hinted && helps) ? question : null;
   const today = scoreDay(day, dayPicks);
   const shownPoints = isNeighbours ? neighbours.points : points;
   const recordMode: Mode = isNeighbours ? 'neighbours' : (quiz ?? 'countries');
@@ -477,6 +532,20 @@ export default function Game() {
               <Text style={styles.title}>Atlas Go</Text>
               <Text style={styles.subtitle}>{t.tagline}</Text>
             </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t.shopLabel(wallet.hints, wallet.discards)}
+              onPress={() => {
+                play('tap');
+                router.push('/shop');
+              }}
+              style={({ pressed }) => [styles.wallet, pressed && { opacity: 0.8 }]}
+            >
+              <MaterialCommunityIcons name="lightbulb-on-outline" size={16} color={colors.purpleSoft} />
+              <Text style={styles.walletText}>{wallet.hints}</Text>
+              <MaterialCommunityIcons name="close-circle-outline" size={16} color={colors.purpleSoft} />
+              <Text style={styles.walletText}>{wallet.discards}</Text>
+            </Pressable>
           </View>
         )}
 
@@ -531,9 +600,11 @@ export default function Game() {
             total={boardProgress.total}
             misses={boardProgress.misses}
             best={boardProgress.best}
+            hints={wallet.hints}
+            onShowMe={showMe}
           />
         ) : isNeighbours ? (
-          <NeighboursPanel game={neighbours} />
+          <NeighboursPanel game={neighbours} discards={wallet.discards} onDiscard={discardName} />
         ) : isDaily && !question ? (
           <DailyPanel day={day} score={today} streak={dayStreak} />
         ) : playing && question ? (
@@ -541,9 +612,15 @@ export default function Game() {
             <Text style={styles.prompt}>
               {prompt(question)}
             </Text>
+            {helps && hinted && (
+              <Text style={styles.hint}>
+                {hintFor(question)}
+                {!answered && ` · ${t.helpedPoints}`}
+              </Text>
+            )}
             <View style={styles.options}>
               {question.options.map((o, i) => {
-                let optionStatus: OptionStatus = 'idle';
+                let optionStatus: OptionStatus = discarded.includes(i) && helps ? 'discarded' : 'idle';
                 if (answered) {
                   if (i === question.answer) optionStatus = 'correct';
                   else if (i === picked) optionStatus = 'wrong';
@@ -555,12 +632,22 @@ export default function Game() {
                     index={i}
                     text={optionLabel(question, o, language)}
                     status={optionStatus}
-                    disabled={answered}
+                    disabled={answered || optionStatus === 'discarded'}
                     onPress={() => answer(i)}
                   />
                 );
               })}
             </View>
+            {helps && !answered && (!hinted || (canDiscard && discarded.length === 0)) && (
+              <Boosts>
+                {!hinted && hintFor(question) && (
+                  <BoostButton icon="lightbulb-on-outline" label={t.boostHint} left={wallet.hints} onPress={showHint} />
+                )}
+                {canDiscard && discarded.length === 0 && (
+                  <BoostButton icon="close-circle-outline" label={t.boostDiscard} left={wallet.discards} onPress={discard} />
+                )}
+              </Boosts>
+            )}
             <Footer
               answered={answered}
               right={right}
@@ -574,6 +661,15 @@ export default function Game() {
           </View>
         ) : (
           <View style={styles.panel}>
+            {gift && (
+              <View style={styles.gift}>
+                <MaterialCommunityIcons name="gift-outline" size={26} color={colors.green} />
+                <Text style={styles.giftText}>{t.giftToday(GIFT_DISCARDS)}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel={t.close} onPress={() => setGift(false)} hitSlop={12}>
+                  <MaterialCommunityIcons name="close" size={20} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            )}
             <Text style={styles.section}>{t.pickMode}</Text>
             {modes.map((m) => (
               <Pressable
@@ -632,6 +728,8 @@ function CompletePanel({
   total,
   misses,
   best,
+  hints,
+  onShowMe,
 }: {
   game: ReturnType<typeof useCompleteGame>;
   board: Board;
@@ -641,6 +739,9 @@ function CompletePanel({
   total: number;
   misses: number;
   best: number | null;
+  /** Hints in the wallet, for "Show me". */
+  hints: number;
+  onShowMe: () => void;
 }) {
   const { colors, styles } = useThemed();
   const { t, language } = useSettings();
@@ -681,6 +782,11 @@ function CompletePanel({
           {noteText}
         </Text>
       </View>
+      {!game.revealed && (
+        <Boosts>
+          <BoostButton icon="lightbulb-on-outline" label={t.boostShowMe} left={hints} half={false} onPress={onShowMe} />
+        </Boosts>
+      )}
       <View style={styles.levelCard}>
         <View style={styles.levelRow}>
           <Text
@@ -753,7 +859,16 @@ function CountryList({
 }
 
 /** Neighbours: the country, the names to pick from, borders found and lives; then the verdict. */
-function NeighboursPanel({ game }: { game: ReturnType<typeof useNeighboursGame> }) {
+function NeighboursPanel({
+  game,
+  discards,
+  onDiscard,
+}: {
+  game: ReturnType<typeof useNeighboursGame>;
+  /** Discards in the wallet, to take a wrong name off the list. */
+  discards: number;
+  onDiscard: () => void;
+}) {
   const { colors, styles } = useThemed();
   const { t, language } = useSettings();
   const { target, note } = game;
@@ -785,27 +900,33 @@ function NeighboursPanel({ game }: { game: ReturnType<typeof useNeighboursGame> 
           .map((iso) => {
             const isFound = game.found.includes(iso);
             const isWrong = game.wrong.includes(iso);
+            const isStruck = game.struck.includes(iso);
             const isMissed = game.revealed && !isFound && game.borders.includes(iso);
             const tone = isFound ? colors.green : isWrong || isMissed ? colors.wrong : null;
             return (
               <Pressable
                 key={iso}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: game.revealed || isFound || isWrong }}
+                accessibilityState={{ disabled: game.revealed || isFound || isWrong || isStruck }}
                 onPress={() => game.name(iso)}
                 style={({ pressed }) => [
                   styles.name,
                   tone && { borderColor: tone, backgroundColor: isFound ? colors.greenSoft : colors.wrongSoft },
                   isMissed && { borderStyle: 'dashed', backgroundColor: colors.surface },
-                  game.revealed && !tone && { opacity: 0.45 },
+                  (game.revealed || isStruck) && !tone && { opacity: 0.45 },
                   pressed && { transform: [{ scale: 0.96 }] },
                 ]}
               >
-                <Text style={[styles.nameText, tone && { color: tone }]}>{name(iso)}</Text>
+                <Text style={[styles.nameText, tone && { color: tone }, isStruck && styles.struck]}>{name(iso)}</Text>
               </Pressable>
             );
           })}
       </View>
+      {game.canDiscard && (
+        <Boosts>
+          <BoostButton icon="close-circle-outline" label={t.boostDiscard} left={discards} half={false} onPress={onDiscard} />
+        </Boosts>
+      )}
       {game.revealed ? (
         <View style={styles.footer}>
           <View>
@@ -1017,6 +1138,28 @@ const useThemed = themed((colors) => ({
     squares: { flexDirection: 'row', justifyContent: 'center', gap: space(1) },
     square: { width: 22, height: 22, borderRadius: 6 },
     hearts: { flexDirection: 'row', gap: space(1) },
+    struck: { color: colors.textMuted, textDecorationLine: 'line-through' },
+    hint: { color: colors.purpleSoft, fontFamily: fonts.bold, fontSize: 15, lineHeight: 21 },
+    wallet: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space(1),
+      backgroundColor: colors.tint,
+      borderRadius: radius.pill,
+      paddingHorizontal: space(3),
+      paddingVertical: space(2),
+    },
+    walletText: { color: colors.text, fontFamily: fonts.heavy, fontSize: 14, marginRight: space(1) },
+    gift: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space(3),
+      backgroundColor: colors.greenSoft,
+      borderRadius: radius.lg,
+      padding: space(4),
+      marginBottom: space(1),
+    },
+    giftText: { flex: 1, color: colors.text, fontFamily: fonts.bold, fontSize: 14, lineHeight: 20 },
     names: { flexDirection: 'row', flexWrap: 'wrap', gap: space(2) },
     name: {
       paddingVertical: space(2),

@@ -77,6 +77,8 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
   const [options, setOptions] = useState<string[]>([]);
   const [found, setFound] = useState<string[]>([]);
   const [wrong, setWrong] = useState<string[]>([]);
+  // Names taken off the list with a discard from the wallet.
+  const [struck, setStruck] = useState<string[]>([]);
   const [lives, setLives] = useState(LIVES);
   const [points, setPoints] = useState(0);
   // Countries completed this run, which sets the level.
@@ -101,6 +103,7 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
     setOptions(shuffle([...NEIGHBOURS[t.iso], ...decoysFor(t, levelFor(n))]));
     setFound([]);
     setWrong([]);
+    setStruck([]);
     setRevealed(false);
     setNote(null);
     setFlash(null);
@@ -132,7 +135,7 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
   };
 
   const name = (iso: string) => {
-    if (!target || revealed || over || found.includes(iso) || wrong.includes(iso)) return;
+    if (!target || revealed || over || found.includes(iso) || wrong.includes(iso) || struck.includes(iso)) return;
     const now = Date.now();
     if (borders.includes(iso)) {
       const total = points + pointsFor(target);
@@ -174,6 +177,16 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
     if (loseLife() > 0) finish(true, points, done);
   };
 
+  /** Names still on the list that don't border the country: what a discard can take away. */
+  const decoysLeft = options.filter((iso) => !borders.includes(iso) && !wrong.includes(iso) && !struck.includes(iso));
+
+  /** Takes one wrong name off the list. The caller pays for it from the wallet first. */
+  const discard = () => {
+    if (!target || revealed || over || decoysLeft.length === 0) return;
+    setStruck([...struck, decoysLeft[Math.floor(Math.random() * decoysLeft.length)]]);
+    play('help');
+  };
+
   const next = () => {
     play('tap');
     if (over) start();
@@ -192,6 +205,8 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
     options,
     found,
     wrong,
+    struck,
+    canDiscard: !!target && !revealed && !over && decoysLeft.length > 0,
     lives,
     points,
     done,
@@ -205,6 +220,7 @@ export function useNeighboursGame(play: (cue: Cue) => void) {
     start,
     name,
     giveUp,
+    discard,
     next,
   };
 }

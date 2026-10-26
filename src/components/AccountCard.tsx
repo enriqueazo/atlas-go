@@ -15,6 +15,7 @@ import {
   type Profile,
 } from '@/cloud/account';
 import { CLOUD_READY } from '@/cloud/config';
+import { forgetWallet } from '@/cloud/wallet';
 import { BY_ISO, COUNTRIES } from '@/game/world';
 import type { Lang } from '@/i18n';
 import { useSettings } from '@/settings';
@@ -69,6 +70,7 @@ export function AccountCard() {
   const confirmDelete = () => {
     const run = async () => {
       if (await deleteAccount()) {
+        await forgetWallet();
         setProfile(null);
         setEditing(false);
       } else if (Platform.OS === 'web') {

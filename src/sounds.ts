@@ -9,6 +9,7 @@ const SOURCES = {
   tap: require('../assets/sounds/tap.wav'),
   zoom: require('../assets/sounds/zoom.wav'),
   record: require('../assets/sounds/record.wav'),
+  help: require('../assets/sounds/help.wav'),
 };
 
 export type Cue = keyof typeof SOURCES;
