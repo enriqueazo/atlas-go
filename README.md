@@ -41,6 +41,7 @@ npx expo start        # then press i, a or w
 - `src/game/complete.ts`, `src/game/useCompleteGame.ts`: Complete the map, on any `Board` (the world or a country).
 - `src/game/countries.ts`: the countries you can complete, loaded only when played.
 - `src/data/world.json`, `src/data/regions/*.json`: generated map data; don't edit by hand.
+- `src/cloud/`: Supabase: the client, the projects (`config.ts`) and the account (`account.ts`). `supabase/migrations/`: the database tables and security rules.
 
 ## Map data
 
@@ -68,6 +69,39 @@ The countries and how their provinces become regions (Spain's comunidades,
 Italy's and France's regions, the Canaries and Alaska moved into insets) are
 listed at the top of the script. Neighbouring countries are drawn as blank
 land around the map. Bigger regions come first, the smallest last.
+
+## Online play (Supabase)
+
+Online play follows Vocablo's setup (`enriqueazo/e-e`). Every player gets a
+free account automatically (Supabase anonymous sign-in) the first time they go
+online, with a profile other players see: a name and a country. The phone stays
+the main copy of everything else, and the game never waits for the network.
+
+Until a Supabase project is set up, `src/cloud/config.ts` is empty and the app
+plays offline: the Account card in Settings says online play isn't on yet.
+
+### Setting it up
+
+1. Create two projects at [supabase.com](https://supabase.com/dashboard):
+   `atlas-go-dev` and `atlas-go-prod` (the free plan is enough).
+2. In each one, turn on anonymous sign-ins: Authentication › Sign In /
+   Providers › "Allow anonymous sign-ins".
+3. Copy each project's URL and **publishable** key (Project Settings › API
+   Keys) into `src/cloud/config.ts`. The publishable key is meant to ship in
+   the app; never put the secret key there.
+4. Push the database to both projects:
+
+   ```bash
+   npx supabase login
+   npx supabase link --project-ref <dev project ref>    # asks for its database password
+   npx supabase db push
+   npx supabase link --project-ref <prod project ref>
+   npx supabase db push
+   ```
+
+`npx expo start` and development builds use dev; tester and store builds
+(`eas.json` "preview" and "production") set `EXPO_PUBLIC_SUPABASE_ENV=prod`.
+The database changes live in `supabase/migrations/`.
 
 ## Sounds
 
