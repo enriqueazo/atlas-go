@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AccountCard } from '@/components/AccountCard';
 import { Screen } from '@/components/ui';
 import type { Lang } from '@/i18n';
 import { useSettings, type Volume } from '@/settings';
@@ -19,6 +20,8 @@ export default function Settings() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>{t.settingsTitle}</Text>
+
+          <AccountCard />
 
           <Appearance />
 
