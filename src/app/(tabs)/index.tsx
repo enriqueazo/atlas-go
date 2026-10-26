@@ -44,7 +44,7 @@ type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
  * The quiz modes keep a record; Complete the map keeps its progress instead,
  * Complete a country keeps one per country, and the map of the day a streak.
  */
-type Play = Mode | 'complete' | 'country' | 'daily' | 'ranked';
+type Play = Mode | 'complete' | 'country' | 'daily' | 'ranked' | 'duels';
 /** What the country list shows for each country: how far along, and the record. */
 type Summary = { filled: number; best: number | null };
 
@@ -155,9 +155,9 @@ export default function Game() {
   };
 
   const start = (m: Play) => {
-    if (m === 'ranked') {
+    if (m === 'ranked' || m === 'duels') {
       play('tap');
-      router.push('/ranked');
+      router.push(m === 'ranked' ? '/ranked' : '/duels');
       return;
     }
     play('zoom');
@@ -301,7 +301,7 @@ export default function Game() {
   const recordMode: Mode = isNeighbours ? 'neighbours' : (quiz ?? 'countries');
   const dayStreak = currentStreak(daily, day);
   const modes: { id: Play; icon: IconName; title: string; description: string; chip: string | null }[] = [
-    // Ranked is played online, so it shows once a Supabase project is set up.
+    // Ranked and duels are played online, so they show once a Supabase project is set up.
     ...(CLOUD_READY
       ? [
           {
@@ -309,6 +309,13 @@ export default function Game() {
             icon: 'trophy-outline' as const,
             title: t.modeRanked,
             description: t.modeRankedDesc(RANKED_ROUNDS, RANKED_SECONDS),
+            chip: null,
+          },
+          {
+            id: 'duels' as const,
+            icon: 'sword-cross' as const,
+            title: t.modeDuels,
+            description: t.modeDuelsDesc(RANKED_ROUNDS),
             chip: null,
           },
         ]
@@ -581,7 +588,7 @@ export default function Game() {
                 <View style={styles.modeText}>
                   {m.chip && (
                     <View style={styles.chips}>
-                      <Chip label={m.chip} tone={m.id === 'complete' || m.id === 'country' || m.id === 'daily' || m.id === 'ranked' ? 'purple' : 'green'} />
+                      <Chip label={m.chip} tone={m.id === 'complete' || m.id === 'country' || m.id === 'daily' || m.id === 'ranked' || m.id === 'duels' ? 'purple' : 'green'} />
                     </View>
                   )}
                   <Text style={styles.modeTitle}>{m.title}</Text>

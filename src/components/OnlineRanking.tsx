@@ -155,6 +155,7 @@ function LeagueCard({ league }: { league: League }) {
         <Text style={styles.muted}>{t.leagueJoin}</Text>
       )}
       <Button label={t.playRanked} onPress={() => router.push('/ranked')} />
+      <Button label={t.modeDuels} variant="ghost" onPress={() => router.push('/duels')} />
     </Card>
   );
 }
