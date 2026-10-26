@@ -116,6 +116,70 @@ const es = {
   dailiesNote: (n: number, top: number) =>
     `${n === 1 ? '1 día jugado' : `${n} días jugados`} · Se guardan tus ${top} mejores en este móvil`,
 
+  modeRanked: 'Clasificatoria',
+  modeRankedDesc: (n: number, secs: number) =>
+    `${n} preguntas de ${secs} segundos, de todos los modos. Tus puntos cuentan en la liga semanal.`,
+  timeUp: '¡Se acabó el tiempo!',
+  rankedDone: '¡Clasificatoria terminada!',
+  leaguePlace: (rank: number, of: number, tier: string) => `${rank}.º de ${of} en la liga ${tier}`,
+  seeRanking: 'Ver ranking',
+  connectionLost: 'Se perdió la conexión: la partida terminó antes de tiempo.',
+  createProfile: 'Crea tu perfil',
+  createProfileBody:
+    'Elige un nombre y tu país en Ajustes › Cuenta para jugar la Clasificatoria, entrar en una liga y salir en los rankings.',
+  goSettings: 'Ir a Ajustes',
+  rankedUnavailable: 'Clasificatoria no disponible',
+  back: 'Volver',
+  cloudError: (code: string) =>
+    ({
+      profile_required: 'Para jugar en línea, crea tu perfil en Ajustes › Cuenta. Es el nombre que verán los demás.',
+      data_mismatch: 'Hay una versión nueva de la app. Actualízala para jugar la Clasificatoria.',
+      group_not_found: 'No hay ningún grupo con ese código.',
+      group_full: 'Ese grupo está completo.',
+      too_many_groups: 'Ya estás en 10 grupos. Sal de alguno para unirte a otro.',
+      bad_name: 'El nombre del grupo debe tener de 3 a 30 caracteres.',
+    })[code] ?? 'No se pudo conectar. Comprueba tu conexión e inténtalo de nuevo.',
+  tiers: ['Explorador', 'Navegante', 'Cartógrafo', 'Geógrafo', 'Atlas'],
+  weeklyLeague: 'Liga semanal',
+  endsIn: (hours: number) => {
+    if (hours <= 1) return 'Termina en menos de una hora';
+    if (hours <= 24) return `Termina en ${Math.ceil(hours)} h`;
+    const days = Math.ceil(hours / 24);
+    return days === 2 ? 'Termina mañana' : `Termina en ${days} días`;
+  },
+  leagueUp: (tier: string) => `¡Subiste a la liga ${tier}!`,
+  leagueDown: (tier: string) => `Bajaste a la liga ${tier}. ¡A por ello esta semana!`,
+  leagueRule: (promote: number, demote: number) =>
+    demote > 0
+      ? `Los ${promote} primeros suben de liga el lunes y los ${demote} últimos bajan.`
+      : `Los ${promote} primeros suben de liga el lunes.`,
+  leagueJoin: 'Juega una Clasificatoria para entrar en la liga de esta semana.',
+  playRanked: 'Jugar Clasificatoria',
+  standings: 'Clasificación',
+  scopeWorld: 'Mundial',
+  scopeGroups: 'Grupos',
+  nobodyWeek: 'Nadie ha jugado aún esta semana. ¡Sé el primero!',
+  nobodyAll: 'Aún no hay nadie aquí.',
+  players: (n: number) => (n === 1 ? '1 jugador' : `${n} jugadores`),
+  playToAppear: ' · Juega una Clasificatoria para aparecer',
+  you: ' (tú)',
+  goesUp: 'Sube',
+  goesDown: 'Baja',
+  groupCode: 'Código',
+  invite: 'Invitar',
+  leaveGroup: 'Salir',
+  groupName: 'Nombre del grupo',
+  groupCodeLabel: 'Código del grupo',
+  groupNamePlaceholder: 'Por ejemplo, Los de clase',
+  groupCodePlaceholder: 'Por ejemplo, K7MPQ2',
+  createGroup: 'Crear grupo',
+  joinGroup: 'Unirme',
+  joinWithCode: 'Unirme con código',
+  groupsHint: 'Crea un grupo y comparte el código para competir con tus amigos.',
+  groupInvite: (name: string, code: string) =>
+    `Únete a mi grupo «${name}» en Atlas Go: Ranking › Grupos › Unirme con código, con el código ${code}`,
+  yourGames: 'Tus partidas en este móvil',
+
   progressTitle: 'Progreso',
   progressEmpty: 'Juega tu primera partida para ver aquí tu progreso.',
   noStreak: 'Sin racha',
@@ -309,6 +373,70 @@ const en: Strings = {
   dailyTitle: (correct: number, total: number) => `${correct} of ${total} right`,
   dailiesNote: (n: number, top: number) =>
     `${n === 1 ? '1 day played' : `${n} days played`} · Your best ${top} are kept on this phone`,
+
+  modeRanked: 'Ranked',
+  modeRankedDesc: (n: number, secs: number) =>
+    `${n} questions of ${secs} seconds, from every mode. Your points count in the weekly league.`,
+  timeUp: 'Time’s up!',
+  rankedDone: 'Ranked game over!',
+  leaguePlace: (rank: number, of: number, tier: string) => `#${rank} of ${of} in the ${tier} league`,
+  seeRanking: 'See ranking',
+  connectionLost: 'The connection dropped, so the game ended early.',
+  createProfile: 'Create your profile',
+  createProfileBody:
+    'Pick a name and your country in Settings › Account to play Ranked, join a league and show up in the rankings.',
+  goSettings: 'Go to Settings',
+  rankedUnavailable: 'Ranked isn’t available',
+  back: 'Back',
+  cloudError: (code: string) =>
+    ({
+      profile_required: 'To play online, create your profile in Settings › Account. It’s the name other players see.',
+      data_mismatch: 'There’s a new version of the app. Update it to play Ranked.',
+      group_not_found: 'There’s no group with that code.',
+      group_full: 'That group is full.',
+      too_many_groups: 'You’re already in 10 groups. Leave one to join another.',
+      bad_name: 'The group name needs 3 to 30 characters.',
+    })[code] ?? 'Couldn’t connect. Check your connection and try again.',
+  tiers: ['Explorer', 'Navigator', 'Cartographer', 'Geographer', 'Atlas'],
+  weeklyLeague: 'Weekly league',
+  endsIn: (hours: number) => {
+    if (hours <= 1) return 'Ends in under an hour';
+    if (hours <= 24) return `Ends in ${Math.ceil(hours)} h`;
+    const days = Math.ceil(hours / 24);
+    return days === 2 ? 'Ends tomorrow' : `Ends in ${days} days`;
+  },
+  leagueUp: (tier: string) => `You moved up to the ${tier} league!`,
+  leagueDown: (tier: string) => `You dropped to the ${tier} league. Go for it this week!`,
+  leagueRule: (promote: number, demote: number) =>
+    demote > 0
+      ? `The top ${promote} move up a league on Monday and the bottom ${demote} drop.`
+      : `The top ${promote} move up a league on Monday.`,
+  leagueJoin: 'Play a Ranked game to join this week’s league.',
+  playRanked: 'Play Ranked',
+  standings: 'Standings',
+  scopeWorld: 'World',
+  scopeGroups: 'Groups',
+  nobodyWeek: 'Nobody has played this week yet. Be the first!',
+  nobodyAll: 'Nobody here yet.',
+  players: (n: number) => (n === 1 ? '1 player' : `${n} players`),
+  playToAppear: ' · Play a Ranked game to show up',
+  you: ' (you)',
+  goesUp: 'Moves up',
+  goesDown: 'Drops',
+  groupCode: 'Code',
+  invite: 'Invite',
+  leaveGroup: 'Leave',
+  groupName: 'Group name',
+  groupCodeLabel: 'Group code',
+  groupNamePlaceholder: 'For example, Class of ’26',
+  groupCodePlaceholder: 'For example, K7MPQ2',
+  createGroup: 'Create group',
+  joinGroup: 'Join',
+  joinWithCode: 'Join with a code',
+  groupsHint: 'Create a group and share the code to compete with your friends.',
+  groupInvite: (name: string, code: string) =>
+    `Join my group “${name}” on Atlas Go: Ranking › Groups › Join with a code, with the code ${code}`,
+  yourGames: 'Your games on this phone',
 
   progressTitle: 'Progress',
   progressEmpty: 'Play your first game to see your progress here.',
