@@ -1,5 +1,7 @@
 import { getLocales } from 'expo-localization';
 
+import type { Duel } from '@/game/duels';
+
 export type Lang = 'es' | 'en';
 
 const es = {
@@ -115,6 +117,138 @@ const es = {
   dailyTitle: (correct: number, total: number) => `${correct} de ${total} aciertos`,
   dailiesNote: (n: number, top: number) =>
     `${n === 1 ? '1 día jugado' : `${n} días jugados`} · Se guardan tus ${top} mejores en este móvil`,
+
+  modeRanked: 'Clasificatoria',
+  modeRankedDesc: (n: number, secs: number) =>
+    `${n} preguntas de ${secs} segundos, de todos los modos. Tus puntos cuentan en la liga semanal.`,
+  timeUp: '¡Se acabó el tiempo!',
+  rankedDone: '¡Clasificatoria terminada!',
+  leaguePlace: (rank: number, of: number, tier: string) => `${rank}.º de ${of} en la liga ${tier}`,
+  seeRanking: 'Ver ranking',
+  connectionLost: 'Se perdió la conexión: la partida terminó antes de tiempo.',
+  createProfile: 'Crea tu perfil',
+  createProfileBody:
+    'Elige un nombre y tu país en Ajustes › Cuenta para jugar la Clasificatoria, entrar en una liga y salir en los rankings.',
+  goSettings: 'Ir a Ajustes',
+  rankedUnavailable: 'Clasificatoria no disponible',
+  back: 'Volver',
+  cloudError: (code: string) =>
+    ({
+      profile_required: 'Para jugar en línea, crea tu perfil en Ajustes › Cuenta. Es el nombre que verán los demás.',
+      data_mismatch: 'Hay una versión nueva de la app. Actualízala para jugar la Clasificatoria.',
+      group_not_found: 'No hay ningún grupo con ese código.',
+      group_full: 'Ese grupo está completo.',
+      too_many_groups: 'Ya estás en 10 grupos. Sal de alguno para unirte a otro.',
+      bad_name: 'El nombre del grupo debe tener de 3 a 30 caracteres.',
+    })[code] ?? 'No se pudo conectar. Comprueba tu conexión e inténtalo de nuevo.',
+  tiers: ['Explorador', 'Navegante', 'Cartógrafo', 'Geógrafo', 'Atlas'],
+  weeklyLeague: 'Liga semanal',
+  endsIn: (hours: number) => {
+    if (hours <= 1) return 'Termina en menos de una hora';
+    if (hours <= 24) return `Termina en ${Math.ceil(hours)} h`;
+    const days = Math.ceil(hours / 24);
+    return days === 2 ? 'Termina mañana' : `Termina en ${days} días`;
+  },
+  leagueUp: (tier: string) => `¡Subiste a la liga ${tier}!`,
+  leagueDown: (tier: string) => `Bajaste a la liga ${tier}. ¡A por ello esta semana!`,
+  leagueRule: (promote: number, demote: number) =>
+    demote > 0
+      ? `Los ${promote} primeros suben de liga el lunes y los ${demote} últimos bajan.`
+      : `Los ${promote} primeros suben de liga el lunes.`,
+  leagueJoin: 'Juega una Clasificatoria para entrar en la liga de esta semana.',
+  playRanked: 'Jugar Clasificatoria',
+  standings: 'Clasificación',
+  scopeWorld: 'Mundial',
+  scopeGroups: 'Grupos',
+  nobodyWeek: 'Nadie ha jugado aún esta semana. ¡Sé el primero!',
+  nobodyAll: 'Aún no hay nadie aquí.',
+  players: (n: number) => (n === 1 ? '1 jugador' : `${n} jugadores`),
+  playToAppear: ' · Juega una Clasificatoria para aparecer',
+  you: ' (tú)',
+  goesUp: 'Sube',
+  goesDown: 'Baja',
+  groupCode: 'Código',
+  invite: 'Invitar',
+  leaveGroup: 'Salir',
+  groupName: 'Nombre del grupo',
+  groupCodeLabel: 'Código del grupo',
+  groupNamePlaceholder: 'Por ejemplo, Los de clase',
+  groupCodePlaceholder: 'Por ejemplo, K7MPQ2',
+  createGroup: 'Crear grupo',
+  joinGroup: 'Unirme',
+  joinWithCode: 'Unirme con código',
+  groupsHint: 'Crea un grupo y comparte el código para competir con tus amigos.',
+  groupInvite: (name: string, code: string) =>
+    `Únete a mi grupo «${name}» en Atlas Go: Ranking › Grupos › Unirme con código, con el código ${code}`,
+  yourGames: 'Tus partidas en este móvil',
+  modeDuels: 'Duelos',
+  modeDuelsDesc: (n: number) =>
+    `Reta a alguien: los dos jugáis las mismas ${n} preguntas, cada uno cuando pueda, y gana quien acierte más.`,
+  duelsToPlay: (n: number) => `Te toca en ${n}`,
+  newDuel: 'Nuevo duelo',
+  newDuelBody: (n: number, hours: number) =>
+    `Los dos jugáis las mismas ${n} preguntas, cada uno cuando pueda (tenéis ${hours} horas). Gana quien acierte más; si empatáis, quien sume más puntos y después quien tarde menos. Los puntos del ganador cuentan para su liga.`,
+  challengePlayer: 'Retar a un jugador',
+  theirName: 'Su nombre',
+  challenge: 'Retar',
+  randomRival: 'Rival al azar',
+  shareLink: 'Compartir enlace',
+  gotCode: '¿Te han pasado un código?',
+  lookingForRival: 'Buscando rival. Mientras tanto, ya puedes jugar tu parte en «Te toca».',
+  duelsEmpty: (n: number) =>
+    `Aún no tienes duelos. Reta a alguien: los dos jugáis las mismas ${n} preguntas y gana quien acierte más.`,
+  sectionToPlay: 'Te toca',
+  sectionWaiting: 'Esperando',
+  sectionFinished: 'Terminados',
+  linkDuel: 'Duelo por enlace',
+  codeChip: (code: string) => `Código ${code}`,
+  timeLeft: (minutes: number) =>
+    minutes < 1 ? 'queda menos de 1 min' : minutes < 60 ? `quedan ${minutes} min` : `quedan ${Math.floor(minutes / 60)} h`,
+  duelStatus: (d: Duel, left: string) => {
+    if (d.status === 'declined') return d.mine ? 'Rechazado' : 'Lo rechazaste';
+    if (d.status === 'expired') return 'Caducado: nadie jugó a tiempo';
+    if (d.status === 'done') {
+      if (d.result === 'won') return d.them.played ? '¡Ganaste!' : '¡Ganaste! Tu rival no jugó a tiempo';
+      if (d.result === 'lost') return d.me.played ? 'Perdiste' : 'Perdiste: no jugaste a tiempo';
+      return 'Empate';
+    }
+    if (d.to_play) return d.me.started ? `Partida a medias · ${left}` : `Te toca · ${left}`;
+    if (!d.rival) return d.kind === 'random' ? `Buscando rival · ${left}` : `Esperando a que alguien acepte · ${left}`;
+    return `Esperando a ${d.rival} · ${left}`;
+  },
+  duelTitle: 'Duelo',
+  playDuel: (n: number) => `Jugar mis ${n} preguntas`,
+  keepPlaying: 'Seguir jugando',
+  shareCodeBody: 'Comparte el enlace o dale este código a quien quieras retar. El primero que lo abra será tu rival.',
+  declineDuel: 'Rechazar el duelo',
+  cancelDuel: 'Cancelar el duelo',
+  byQuestion: 'Pregunta a pregunta',
+  youCol: 'Tú',
+  rivalCol: 'Rival',
+  timeCol: 'Tiempo',
+  duelGone: 'Este duelo ya no está en tu lista.',
+  duelShare: (link: string, code: string) =>
+    `¡Te reto a un duelo de geografía en Atlas Go! Abre ${link} o escribe el código ${code} en Duelos.`,
+  joinDuelFailed: 'No se pudo aceptar el duelo',
+  joiningDuel: 'Aceptando el duelo…',
+  seeDuels: 'Ver mis duelos',
+  seeDuel: 'Ver el duelo',
+  leaguePoints: (n: number) => `+${n} puntos para tu liga`,
+  hasPlayed: 'Ya jugó',
+  notPlayed: 'Sin jugar',
+  ptsTime: (pts: number, time: string) => `${pts} pts · ${time}`,
+  rivalHidden: 'Las respuestas de tu rival se verán cuando termine el duelo.',
+  duelError: (code: string) =>
+    ({
+      player_not_found: 'No hay ningún jugador con ese nombre.',
+      own_duel: 'No puedes retarte a ti mismo.',
+      duel_not_found: 'No hay ningún duelo con ese código.',
+      duel_taken: 'Otra persona ya aceptó ese duelo.',
+      duel_expired: 'Ese duelo ya terminó.',
+      duel_over: 'Ese duelo ya terminó.',
+      already_played: 'Ya jugaste este duelo.',
+      too_many_duels: 'Tienes demasiados duelos abiertos. Termina alguno antes de empezar otro.',
+    })[code],
 
   progressTitle: 'Progreso',
   progressEmpty: 'Juega tu primera partida para ver aquí tu progreso.',
@@ -309,6 +443,138 @@ const en: Strings = {
   dailyTitle: (correct: number, total: number) => `${correct} of ${total} right`,
   dailiesNote: (n: number, top: number) =>
     `${n === 1 ? '1 day played' : `${n} days played`} · Your best ${top} are kept on this phone`,
+
+  modeRanked: 'Ranked',
+  modeRankedDesc: (n: number, secs: number) =>
+    `${n} questions of ${secs} seconds, from every mode. Your points count in the weekly league.`,
+  timeUp: 'Time’s up!',
+  rankedDone: 'Ranked game over!',
+  leaguePlace: (rank: number, of: number, tier: string) => `#${rank} of ${of} in the ${tier} league`,
+  seeRanking: 'See ranking',
+  connectionLost: 'The connection dropped, so the game ended early.',
+  createProfile: 'Create your profile',
+  createProfileBody:
+    'Pick a name and your country in Settings › Account to play Ranked, join a league and show up in the rankings.',
+  goSettings: 'Go to Settings',
+  rankedUnavailable: 'Ranked isn’t available',
+  back: 'Back',
+  cloudError: (code: string) =>
+    ({
+      profile_required: 'To play online, create your profile in Settings › Account. It’s the name other players see.',
+      data_mismatch: 'There’s a new version of the app. Update it to play Ranked.',
+      group_not_found: 'There’s no group with that code.',
+      group_full: 'That group is full.',
+      too_many_groups: 'You’re already in 10 groups. Leave one to join another.',
+      bad_name: 'The group name needs 3 to 30 characters.',
+    })[code] ?? 'Couldn’t connect. Check your connection and try again.',
+  tiers: ['Explorer', 'Navigator', 'Cartographer', 'Geographer', 'Atlas'],
+  weeklyLeague: 'Weekly league',
+  endsIn: (hours: number) => {
+    if (hours <= 1) return 'Ends in under an hour';
+    if (hours <= 24) return `Ends in ${Math.ceil(hours)} h`;
+    const days = Math.ceil(hours / 24);
+    return days === 2 ? 'Ends tomorrow' : `Ends in ${days} days`;
+  },
+  leagueUp: (tier: string) => `You moved up to the ${tier} league!`,
+  leagueDown: (tier: string) => `You dropped to the ${tier} league. Go for it this week!`,
+  leagueRule: (promote: number, demote: number) =>
+    demote > 0
+      ? `The top ${promote} move up a league on Monday and the bottom ${demote} drop.`
+      : `The top ${promote} move up a league on Monday.`,
+  leagueJoin: 'Play a Ranked game to join this week’s league.',
+  playRanked: 'Play Ranked',
+  standings: 'Standings',
+  scopeWorld: 'World',
+  scopeGroups: 'Groups',
+  nobodyWeek: 'Nobody has played this week yet. Be the first!',
+  nobodyAll: 'Nobody here yet.',
+  players: (n: number) => (n === 1 ? '1 player' : `${n} players`),
+  playToAppear: ' · Play a Ranked game to show up',
+  you: ' (you)',
+  goesUp: 'Moves up',
+  goesDown: 'Drops',
+  groupCode: 'Code',
+  invite: 'Invite',
+  leaveGroup: 'Leave',
+  groupName: 'Group name',
+  groupCodeLabel: 'Group code',
+  groupNamePlaceholder: 'For example, Class of ’26',
+  groupCodePlaceholder: 'For example, K7MPQ2',
+  createGroup: 'Create group',
+  joinGroup: 'Join',
+  joinWithCode: 'Join with a code',
+  groupsHint: 'Create a group and share the code to compete with your friends.',
+  groupInvite: (name: string, code: string) =>
+    `Join my group “${name}” on Atlas Go: Ranking › Groups › Join with a code, with the code ${code}`,
+  yourGames: 'Your games on this phone',
+  modeDuels: 'Duels',
+  modeDuelsDesc: (n: number) =>
+    `Challenge someone: you both play the same ${n} questions, whenever you can, and whoever gets more right wins.`,
+  duelsToPlay: (n: number) => `Your turn in ${n}`,
+  newDuel: 'New duel',
+  newDuelBody: (n: number, hours: number) =>
+    `You both play the same ${n} questions, whenever you can (you have ${hours} hours). Whoever gets more right wins; on a tie, more points, then less time. The winner’s points count for their league.`,
+  challengePlayer: 'Challenge a player',
+  theirName: 'Their name',
+  challenge: 'Challenge',
+  randomRival: 'Random rival',
+  shareLink: 'Share a link',
+  gotCode: 'Got a code?',
+  lookingForRival: 'Looking for a rival. Meanwhile, you can already play your part under “Your turn”.',
+  duelsEmpty: (n: number) =>
+    `No duels yet. Challenge someone: you both play the same ${n} questions and whoever gets more right wins.`,
+  sectionToPlay: 'Your turn',
+  sectionWaiting: 'Waiting',
+  sectionFinished: 'Finished',
+  linkDuel: 'Link duel',
+  codeChip: (code: string) => `Code ${code}`,
+  timeLeft: (minutes: number) =>
+    minutes < 1 ? 'under 1 min left' : minutes < 60 ? `${minutes} min left` : `${Math.floor(minutes / 60)} h left`,
+  duelStatus: (d: Duel, left: string) => {
+    if (d.status === 'declined') return d.mine ? 'Declined' : 'You declined it';
+    if (d.status === 'expired') return 'Expired: nobody played in time';
+    if (d.status === 'done') {
+      if (d.result === 'won') return d.them.played ? 'You won!' : 'You won! Your rival didn’t play in time';
+      if (d.result === 'lost') return d.me.played ? 'You lost' : 'You lost: you didn’t play in time';
+      return 'A draw';
+    }
+    if (d.to_play) return d.me.started ? `Half played · ${left}` : `Your turn · ${left}`;
+    if (!d.rival) return d.kind === 'random' ? `Looking for a rival · ${left}` : `Waiting for someone to accept · ${left}`;
+    return `Waiting for ${d.rival} · ${left}`;
+  },
+  duelTitle: 'Duel',
+  playDuel: (n: number) => `Play my ${n} questions`,
+  keepPlaying: 'Keep playing',
+  shareCodeBody: 'Share the link or give this code to whoever you want to challenge. The first to open it is your rival.',
+  declineDuel: 'Decline the duel',
+  cancelDuel: 'Cancel the duel',
+  byQuestion: 'Question by question',
+  youCol: 'You',
+  rivalCol: 'Rival',
+  timeCol: 'Time',
+  duelGone: 'This duel is no longer on your list.',
+  duelShare: (link: string, code: string) =>
+    `I challenge you to a geography duel on Atlas Go! Open ${link} or type the code ${code} in Duels.`,
+  joinDuelFailed: 'Couldn’t accept the duel',
+  joiningDuel: 'Accepting the duel…',
+  seeDuels: 'See my duels',
+  seeDuel: 'See the duel',
+  leaguePoints: (n: number) => `+${n} points for your league`,
+  hasPlayed: 'Played',
+  notPlayed: 'Not played',
+  ptsTime: (pts: number, time: string) => `${pts} pts · ${time}`,
+  rivalHidden: 'Your rival’s answers show once the duel is over.',
+  duelError: (code: string) =>
+    ({
+      player_not_found: 'There’s no player with that name.',
+      own_duel: 'You can’t challenge yourself.',
+      duel_not_found: 'There’s no duel with that code.',
+      duel_taken: 'Someone else already accepted that duel.',
+      duel_expired: 'That duel is over.',
+      duel_over: 'That duel is over.',
+      already_played: 'You already played this duel.',
+      too_many_duels: 'You have too many open duels. Finish one before starting another.',
+    })[code],
 
   progressTitle: 'Progress',
   progressEmpty: 'Play your first game to see your progress here.',

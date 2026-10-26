@@ -47,7 +47,7 @@ The app is linked to the EAS project `atlas-go` on the `enriqueazos-team` accoun
 - `src/game/complete.ts`, `src/game/useCompleteGame.ts`: Complete the map, on any `Board` (the world or a country).
 - `src/game/countries.ts`: the countries you can complete, loaded only when played.
 - `src/data/world.json`, `src/data/regions/*.json`: generated map data; don't edit by hand.
-- `src/cloud/`: Supabase: the client, the projects (`config.ts`) and the account (`account.ts`). `supabase/migrations/`: the database tables and security rules.
+- `src/cloud/`: Supabase: the client, the projects (`config.ts`), the account (`account.ts`), ranked games, leagues and groups (`ranked.ts`) and duels (`duels.ts`). `src/app/ranked.tsx` and `src/components/RankedGame.tsx`: the Ranked screen; `src/components/OnlineRanking.tsx`: the league and standings in the Ranking tab. `src/app/duels/`, `src/app/play-duel.tsx`, `src/app/duel/[code].tsx`: the duel screens. `supabase/migrations/`: the database tables and security rules.
 
 ## Map data
 
@@ -108,6 +108,42 @@ plays offline: the Account card in Settings says online play isn't on yet.
 `npx expo start` and development builds use dev; tester and store builds
 (`eas.json` "preview" and "production") set `EXPO_PUBLIC_SUPABASE_ENV=prod`.
 The database changes live in `supabase/migrations/`.
+
+### Ranked and weekly leagues
+
+**Clasificatoria / Ranked** is 10 questions of 30 seconds that take turns
+through Countries, Flags, Silhouettes and Capitals. The server runs the game
+(`supabase/migrations/*_ranked_and_leagues.sql`): it picks each question near
+the player's level (up one level per right answer, down one per miss), times
+it, and scores it at 10 × the place's tier. The app only draws the question.
+Points go to the weekly league: about 30 players of the same tier
+(Explorer › Navigator › Cartographer › Geographer › Atlas), where each Monday
+the top 7 go up and the bottom 5 go down. The Ranking tab shows the league,
+the standings (world, your country, or an invite-code group) and the groups.
+
+The app draws each question itself, so it does know the answer: the server
+stops made-up scores, easy picks and slow answers, not a player reading the
+app's memory. That's the same trade-off Vocablo makes.
+
+The server keeps the list of places it can ask about. **Whenever
+`world.json`, the silhouettes or the flags change**, regenerate it and push the
+new migration, or ranked games will refuse to start ("there's a new version"):
+
+```bash
+node scripts/build-ranked-places.mjs
+npx supabase db push
+```
+
+### Duels
+
+**Duelos / Duels** are asynchronous, as in Vocablo
+(`supabase/migrations/*_duels.sql`). Both players get the same 10 questions
+(the same places and options, from level 1 to 5) and each plays whenever they
+can within 48 hours. Whoever gets more right wins; ties go to more points,
+then less total time, and the winner's points count for their league. A duel
+starts by challenging a player by name, sharing a link
+(`atlasgo://duel/CODE`) or its code, or asking for a random rival. Each
+player's game is a server-run Ranked game, so the same rules apply.
 
 ## Sounds
 

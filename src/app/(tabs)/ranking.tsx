@@ -1,9 +1,9 @@
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { OnlineRanking } from '@/components/OnlineRanking';
 import { Screen } from '@/components/ui';
 import { formatTime } from '@/game/complete';
 import { COUNTRY_MAPS } from '@/game/countries';
@@ -16,9 +16,9 @@ type Board = Mode | 'complete' | 'country' | 'daily';
 type Period = 'week' | 'all';
 type RowData = { key: string; title: string; value: string; at: number };
 
-// Vocablo's Ranking with what lives on this phone: your best games per mode,
-// this week or all time. The online tables (leagues, countries, groups) need
-// accounts and a server, so they wait.
+// Vocablo's Ranking: the weekly league and the online standings first
+// (OnlineRanking), then what lives on this phone: your best games per mode,
+// this week or all time.
 export default function RankingTab() {
   const { colors, styles } = useThemed();
   const { t, language } = useSettings();
@@ -80,15 +80,7 @@ export default function RankingTab() {
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>{t.rankingTitle}</Text>
 
-          <Card>
-            <View style={styles.row}>
-              <View style={styles.tierIcon}>
-                <MaterialCommunityIcons name="earth" size={28} color={colors.purpleSoft} />
-              </View>
-              <Text style={[styles.big, { flex: 1 }]}>{t.rankingSoon}</Text>
-            </View>
-            <Text style={styles.muted}>{t.rankingBody}</Text>
-          </Card>
+          <OnlineRanking />
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t.yourBest}</Text>
@@ -234,20 +226,8 @@ const useThemed = themed((colors) => ({
       padding: space(5),
       gap: space(4),
     },
-    row: { flexDirection: 'row', alignItems: 'center', gap: space(3) },
-    big: { color: colors.text, fontFamily: fonts.heavy, fontSize: 20 },
     muted: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 15, lineHeight: 22 },
     note: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-    tierIcon: {
-      width: 52,
-      height: 52,
-      borderRadius: 18,
-      borderWidth: 2,
-      borderColor: colors.purpleSoft,
-      backgroundColor: colors.surfaceRaised,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     table: { gap: space(1) },
     tableRow: {
       flexDirection: 'row',
