@@ -2,6 +2,7 @@
   "expo": {
     "name": "Atlas Go",
     "slug": "atlas-go",
+    "owner": "enriqueazos-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -40,6 +41,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "cc1ef398-9cae-4df9-a15f-216984510839"
+      }
     }
   }
 }
