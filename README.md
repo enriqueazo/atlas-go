@@ -31,6 +31,18 @@ npm install
 npx expo start        # then press i, a or w
 ```
 
+## Build with EAS
+
+`eas.json` has three profiles: `development` (dev client, internal), `preview` (internal install, Android APK) and `production` (store builds, build number bumped by EAS).
+
+The first time, link the project to your Expo account so `app.json` gets its `extra.eas.projectId`:
+
+```bash
+npx eas-cli@latest init
+```
+
+Commit that change. After that, builds can be started from the CLI (`npx eas-cli@latest build --profile preview`) or from the project's page on expo.dev, including GitHub-triggered builds once the repo is linked there.
+
 ## Project layout
 
 - `src/app/(tabs)/`: the tab screens: `index.tsx` lobby and game, `ranking.tsx`, `settings.tsx`.
