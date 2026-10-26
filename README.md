@@ -31,6 +31,12 @@ npm install
 npx expo start        # then press i, a or w
 ```
 
+## Build with EAS
+
+`eas.json` has three profiles: `development` (dev client, internal), `preview` (internal install, Android APK) and `production` (store builds, build number bumped by EAS). `preview` and `production` talk to the prod Supabase project; `development` uses dev.
+
+The app is linked to the EAS project `atlas-go` on the `enriqueazos-team` account (`owner` and `extra.eas.projectId` in `app.json`). Builds can be started from the CLI (`npx eas-cli@latest build --profile preview`) or from the project's page on expo.dev; pick a branch that has `eas.json`.
+
 ## Project layout
 
 - `src/app/(tabs)/`: the tab screens: `index.tsx` lobby and game, `ranking.tsx`, `settings.tsx`.
