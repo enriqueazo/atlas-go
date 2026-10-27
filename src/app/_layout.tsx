@@ -6,7 +6,9 @@ import { useEffect } from 'react';
 import { ActivityIndicator, AppState, useColorScheme, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { startAds } from '@/ads/ads';
 import { syncWallet } from '@/cloud/wallet';
+import { TestInterstitialHost } from '@/components/TestInterstitial';
 import { SettingsProvider, useSettings } from '@/settings';
 import { PALETTES, ThemeProvider, useTheme } from '@/theme';
 
@@ -32,6 +34,11 @@ function Screens() {
 
   // Sends the hints and discards used offline and reads the wallet back, when
   // the app opens and each time it comes back to the front.
+  // Google's consent form and Apple's tracking prompt come up here, once.
+  useEffect(() => {
+    if (ready) startAds();
+  }, [ready]);
+
   useEffect(() => {
     syncWallet();
     const sub = AppState.addEventListener('change', (state) => {
@@ -52,6 +59,7 @@ function Screens() {
           animation: 'fade',
         }}
       />
+      <TestInterstitialHost />
     </>
   );
 }

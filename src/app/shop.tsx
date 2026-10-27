@@ -6,7 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CLOUD_READY } from '@/cloud/config';
 import { failed } from '@/cloud/ranked';
-import { claimDailyGift, rewardAd, syncWallet, testPurchase, useWallet } from '@/cloud/wallet';
+import { hasRealAds } from '@/ads/ads';
+import { claimDailyGift, rewardAd, syncWallet, testPurchase, useWallet, watchAdForHint } from '@/cloud/wallet';
 import { TestAd } from '@/components/TestAd';
 import { Button, Chip, Screen } from '@/components/ui';
 import { AD_HINTS, ADS_PER_DAY, GIFT_DISCARDS, giftClaimedToday, PRODUCTS, type Product } from '@/game/shop';
@@ -17,7 +18,8 @@ type Icon = ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 // The shop, as in Vocablo: the wallet, the daily gift, rewarded ads and the
 // packs. Until the store accounts exist, purchases are test purchases
-// (nothing is charged) and the ad is a stand-in.
+// (nothing is charged). The ad is Google's (test ads until Atlas Go has its
+// own ad units), or a stand-in where the build has no AdMob (web, Expo Go).
 export default function Shop() {
   const { colors, styles } = useThemed();
   const { t } = useSettings();
@@ -50,6 +52,11 @@ export default function Shop() {
   const adWatched = (watched: boolean) => {
     setAdOpen(false);
     if (watched) run(rewardAd, t.adDone(AD_HINTS));
+  };
+  const watchAd = () => {
+    if (wallet.adFree) adWatched(true);
+    else if (hasRealAds()) run(watchAdForHint, t.adDone(AD_HINTS));
+    else setAdOpen(true);
   };
 
   const buy = (p: Product) => {
@@ -107,7 +114,7 @@ export default function Shop() {
             detail={t.adDetail(AD_HINTS, adsLeft, ADS_PER_DAY)}
             action={adsLeft > 0 ? (wallet.adFree ? t.adReceive : t.adWatch) : null}
             doneLabel={t.adLater}
-            onPress={() => (wallet.adFree ? adWatched(true) : setAdOpen(true))}
+            onPress={watchAd}
             disabled={busy}
           />
 

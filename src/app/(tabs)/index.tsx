@@ -4,9 +4,10 @@ import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { Animated, BackHandler, Pressable, ScrollView, Share, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { countAdQuestion, showAdIfDue, startAdVisit } from '@/ads/ads';
 import { CLOUD_READY } from '@/cloud/config';
 import { claimGiftIfDue, spendFromWallet, useWallet } from '@/cloud/wallet';
-import { BoostButton, Boosts } from '@/components/Boosts';
+import { AdHintButton, BoostButton, Boosts } from '@/components/Boosts';
 import { OptionCard, type OptionStatus } from '@/components/OptionCard';
 import { Flag } from '@/components/Flag';
 import { Silhouette } from '@/components/Silhouette';
@@ -33,6 +34,7 @@ import {
 import { levelFor, MAX_LEVEL, nextQuestion, optionLabel, PER_LEVEL, pointsFor, type Question } from '@/game/engine';
 import { RANKED_ROUNDS, RANKED_SECONDS } from '@/game/leagues';
 import { loadSaved, useBoardProgress } from '@/game/progress';
+import type { AdMode } from '@/game/adSchedule';
 import { GIFT_DISCARDS, helpedPoints, type Boost } from '@/game/shop';
 import { dayKey, trackAnswer, trackDaily, trackRun } from '@/game/stats';
 import { useCompleteGame } from '@/game/useCompleteGame';
@@ -143,6 +145,14 @@ export default function Game() {
     countryGame.start();
   }, [starting, countryProgress.ready]);
 
+  // Each place painted counts toward the map's full-screen ad, which waits until the player leaves.
+  const painted = useRef(0);
+  useEffect(() => {
+    const n = boardProgress.filled.size;
+    if (painting && n === painted.current + 1) countAdQuestion(mode === 'country' ? 'country' : 'complete');
+    painted.current = n;
+  }, [boardProgress.filled.size, painting, mode]);
+
   // The tab bar steps aside while a game is on.
   useEffect(() => {
     navigation.setOptions({ tabBarStyle: playing ? { display: 'none' } : tabBarStyle(colors, insets) });
@@ -174,6 +184,7 @@ export default function Game() {
     }
     play('zoom');
     scroll.current?.scrollTo({ y: 0, animated: false });
+    if (m !== 'daily' && m !== 'country') startAdVisit(m);
     if (m === 'complete') {
       setMode(m);
       complete.start();
@@ -217,10 +228,15 @@ export default function Game() {
     setCountryMap(countryBoard(m.iso));
     setCountry(m);
     setStarting(true);
+    startAdVisit('country');
   };
 
   const quit = () => {
-    if (painting) game.stop();
+    if (painting) {
+      game.stop();
+      // The map's full-screen ad waits until the player leaves it, off the clock.
+      showAdIfDue(mode === 'country' ? 'country' : 'complete', wallet.adFree);
+    }
     // Leaving a country's map goes back to the list of countries.
     if (mode === 'country' && country) {
       setStarting(false);
@@ -256,6 +272,7 @@ export default function Game() {
     if (!question || !quiz || picked !== null) return;
     setPicked(i);
     trackAnswer({ mode: quiz, iso: question.target.iso, correct: i === question.answer });
+    countAdQuestion(quiz);
     if (i === question.answer) {
       const pts = helpedPoints(pointsFor(question), hinted || discarded.length > 0);
       const total = points + pts;
@@ -310,7 +327,22 @@ export default function Game() {
     if (await spendFromWallet('discard')) neighbours.discard();
   };
 
-  const next = () => {
+  // The full-screen ad, when one is due, comes between an answer and the next question.
+  const showingAd = useRef(false);
+  const adBreak = async (m: AdMode) => {
+    if (showingAd.current) return false;
+    showingAd.current = true;
+    await showAdIfDue(m, wallet.adFree);
+    showingAd.current = false;
+    return true;
+  };
+
+  const nextNeighbour = async () => {
+    countAdQuestion('neighbours');
+    if (await adBreak('neighbours')) neighbours.next();
+  };
+
+  const next = async () => {
     if (isDaily) {
       const n = dayPicks.length;
       play(n < DAILY_ROUNDS ? 'tap' : 'record');
@@ -318,7 +350,7 @@ export default function Game() {
       setPicked(null);
       return;
     }
-    if (!quiz) return;
+    if (!quiz || !(await adBreak(quiz))) return;
     play('tap');
     ask(quiz, streak);
   };
@@ -601,10 +633,11 @@ export default function Game() {
             misses={boardProgress.misses}
             best={boardProgress.best}
             hints={wallet.hints}
+            adsLeft={wallet.adsLeft}
             onShowMe={showMe}
           />
         ) : isNeighbours ? (
-          <NeighboursPanel game={neighbours} discards={wallet.discards} onDiscard={discardName} />
+          <NeighboursPanel game={neighbours} discards={wallet.discards} onDiscard={discardName} onNext={nextNeighbour} />
         ) : isDaily && !question ? (
           <DailyPanel day={day} score={today} streak={dayStreak} />
         ) : playing && question ? (
@@ -640,9 +673,13 @@ export default function Game() {
             </View>
             {helps && !answered && (!hinted || (canDiscard && discarded.length === 0)) && (
               <Boosts>
-                {!hinted && hintFor(question) && (
-                  <BoostButton icon="lightbulb-on-outline" label={t.boostHint} left={wallet.hints} onPress={showHint} />
-                )}
+                {!hinted &&
+                  hintFor(question) &&
+                  (wallet.hints <= 0 && wallet.adsLeft > 0 ? (
+                    <AdHintButton onReward={showHint} />
+                  ) : (
+                    <BoostButton icon="lightbulb-on-outline" label={t.boostHint} left={wallet.hints} onPress={showHint} />
+                  ))}
                 {canDiscard && discarded.length === 0 && (
                   <BoostButton icon="close-circle-outline" label={t.boostDiscard} left={wallet.discards} onPress={discard} />
                 )}
@@ -729,6 +766,7 @@ function CompletePanel({
   misses,
   best,
   hints,
+  adsLeft,
   onShowMe,
 }: {
   game: ReturnType<typeof useCompleteGame>;
@@ -741,6 +779,8 @@ function CompletePanel({
   best: number | null;
   /** Hints in the wallet, for "Show me". */
   hints: number;
+  /** Rewarded ads left today, for a hint once the wallet has none. */
+  adsLeft: number;
   onShowMe: () => void;
 }) {
   const { colors, styles } = useThemed();
@@ -784,7 +824,11 @@ function CompletePanel({
       </View>
       {!game.revealed && (
         <Boosts>
-          <BoostButton icon="lightbulb-on-outline" label={t.boostShowMe} left={hints} half={false} onPress={onShowMe} />
+          {hints <= 0 && adsLeft > 0 ? (
+            <AdHintButton onReward={onShowMe} />
+          ) : (
+            <BoostButton icon="lightbulb-on-outline" label={t.boostShowMe} left={hints} half={false} onPress={onShowMe} />
+          )}
         </Boosts>
       )}
       <View style={styles.levelCard}>
@@ -863,11 +907,14 @@ function NeighboursPanel({
   game,
   discards,
   onDiscard,
+  onNext,
 }: {
   game: ReturnType<typeof useNeighboursGame>;
   /** Discards in the wallet, to take a wrong name off the list. */
   discards: number;
   onDiscard: () => void;
+  /** The next country, after the full-screen ad if one is due. */
+  onNext: () => void;
 }) {
   const { colors, styles } = useThemed();
   const { t, language } = useSettings();
@@ -937,7 +984,7 @@ function NeighboursPanel({
               {game.over ? t.nbOverStats(game.points, game.done) : t.bordersFound(game.found.length, game.borders.length)}
             </Text>
           </View>
-          <Button label={game.over ? t.playAgain : t.next} onPress={game.next} />
+          <Button label={game.over ? t.playAgain : t.next} onPress={onNext} />
         </View>
       ) : (
         <View style={styles.levelCard}>
