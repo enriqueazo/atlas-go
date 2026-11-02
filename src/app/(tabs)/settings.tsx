@@ -1,9 +1,11 @@
 import Constants from 'expo-constants';
+import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { adPrivacyRequired, openAdPrivacy } from '@/ads/ads';
 import { AccountCard } from '@/components/AccountCard';
-import { Screen } from '@/components/ui';
+import { Button, Screen } from '@/components/ui';
 import type { Lang } from '@/i18n';
 import { useSettings, type Volume } from '@/settings';
 import { useSound } from '@/sounds';
@@ -29,6 +31,8 @@ export default function Settings() {
 
           <Language />
 
+          <AdPrivacy />
+
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{t.creditsTitle}</Text>
             <Text style={styles.text}>{t.credits}</Text>
@@ -41,6 +45,24 @@ export default function Settings() {
         </ScrollView>
       </SafeAreaView>
     </Screen>
+  );
+}
+
+/** Google's consent form again, where the law asks for one (the EU and the UK), as in Vocablo. */
+function AdPrivacy() {
+  const { styles } = useThemed();
+  const { t } = useSettings();
+  const [required, setRequired] = useState(false);
+  useEffect(() => {
+    adPrivacyRequired().then(setRequired);
+  }, []);
+  if (!required) return null;
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>{t.adPrivacyTitle}</Text>
+      <Text style={styles.text}>{t.adPrivacyBody}</Text>
+      <Button label={t.adPrivacyChange} variant="ghost" onPress={openAdPrivacy} style={styles.left} />
+    </View>
   );
 }
 
@@ -209,6 +231,7 @@ const useThemed = themed((colors) => ({
     segmentItem: { flex: 1, alignItems: 'center', paddingVertical: space(2), borderRadius: radius.pill },
     segmentOn: { backgroundColor: colors.surface },
     segmentText: { color: colors.textMuted, fontFamily: fonts.bold, fontSize: 14 },
+    left: { alignSelf: 'flex-start', marginTop: space(1) },
     version: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 13, textAlign: 'center' },
   }),
 }));

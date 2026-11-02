@@ -140,7 +140,7 @@ const es = {
       group_full: 'Ese grupo está completo.',
       too_many_groups: 'Ya estás en 10 grupos. Sal de alguno para unirte a otro.',
       bad_name: 'El nombre del grupo debe tener de 3 a 30 caracteres.',
-    })[code] ?? 'No se pudo conectar. Comprueba tu conexión e inténtalo de nuevo.',
+    } as Record<string, string>)[code] ?? 'No se pudo conectar. Comprueba tu conexión e inténtalo de nuevo.',
   tiers: ['Explorador', 'Navegante', 'Cartógrafo', 'Geógrafo', 'Atlas'],
   weeklyLeague: 'Liga semanal',
   endsIn: (hours: number) => {
@@ -363,16 +363,24 @@ const es = {
   buy: 'Comprar',
   purchaseDone: (title: string) => `Compra de prueba hecha: ${title.toLowerCase()}.`,
   restoreLater: 'Restaurar compras y los precios de tu país llegarán con la tienda de verdad.',
-  shopError: (code: string, adsPerDay: number) =>
-    code === 'ad_limit'
-      ? `Ya has visto ${adsPerDay} anuncios hoy. Mañana hay más.`
-      : code === 'shop_closed'
-        ? 'La tienda aún no está abierta.'
-        : code === 'unknown_product'
-          ? 'Ese producto ya no existe.'
-          : code === 'bad_day'
-            ? 'La fecha del móvil no parece correcta.'
-            : 'Necesitas conexión para la tienda.',
+  shopError: (code: string, adsPerDay: number): string =>
+    ({
+      ad_limit: `Ya has visto ${adsPerDay} anuncios hoy. Mañana hay más.`,
+      no_ad: 'No hay anuncios ahora. Prueba dentro de un rato.',
+      ad_closed: 'El anuncio se cerró antes de terminar: sin pista esta vez.',
+      ad_pending: 'Anuncio visto. Tu pista llegará en un momento.',
+      shop_closed: 'La tienda aún no está abierta.',
+      unknown_product: 'Ese producto ya no existe.',
+      bad_day: 'La fecha del móvil no parece correcta.',
+    } as Record<string, string>)[code] ?? 'Necesitas conexión para la tienda.',
+  interstitialBody: 'Aquí irá un anuncio de Google entre preguntas. En esta versión de prueba no se muestra ninguno.',
+  interstitialClose: 'Cerrar el anuncio',
+  adHint: (n: number) => `Mira un anuncio: +${n} ${n === 1 ? 'pista' : 'pistas'}`,
+  adHintFree: (n: number) => `Pista gratis: +${n}`,
+  adHintLabel: (label: string, left: number) => `${label}. Quedan ${left} hoy`,
+  adPrivacyTitle: 'Privacidad de los anuncios',
+  adPrivacyBody: 'Elige si los anuncios pueden usar tus datos para ser personalizados.',
+  adPrivacyChange: 'Cambiar mi elección',
   testAdTitle: 'Anuncio de prueba',
   testAdBody: 'Aquí irá un anuncio de Google. En esta versión de prueba no se muestra ninguno.',
   testAdIn: (s: number) => `Recompensa en ${s} s`,
@@ -529,7 +537,7 @@ const en: Strings = {
       group_full: 'That group is full.',
       too_many_groups: 'You’re already in 10 groups. Leave one to join another.',
       bad_name: 'The group name needs 3 to 30 characters.',
-    })[code] ?? 'Couldn’t connect. Check your connection and try again.',
+    } as Record<string, string>)[code] ?? 'Couldn’t connect. Check your connection and try again.',
   tiers: ['Explorer', 'Navigator', 'Cartographer', 'Geographer', 'Atlas'],
   weeklyLeague: 'Weekly league',
   endsIn: (hours: number) => {
@@ -752,16 +760,24 @@ const en: Strings = {
   buy: 'Buy',
   purchaseDone: (title: string) => `Test purchase done: ${title.toLowerCase()}.`,
   restoreLater: 'Restoring purchases and your country’s prices will come with the real store.',
-  shopError: (code: string, adsPerDay: number) =>
-    code === 'ad_limit'
-      ? `You’ve watched ${adsPerDay} ads today. More tomorrow.`
-      : code === 'shop_closed'
-        ? 'The shop isn’t open yet.'
-        : code === 'unknown_product'
-          ? 'That product no longer exists.'
-          : code === 'bad_day'
-            ? 'The phone’s date doesn’t look right.'
-            : 'You need a connection for the shop.',
+  shopError: (code: string, adsPerDay: number): string =>
+    ({
+      ad_limit: `You’ve watched ${adsPerDay} ads today. More tomorrow.`,
+      no_ad: 'No ads right now. Try again in a while.',
+      ad_closed: 'The ad closed before the end: no hint this time.',
+      ad_pending: 'Ad watched. Your hint will arrive in a moment.',
+      shop_closed: 'The shop isn’t open yet.',
+      unknown_product: 'That product no longer exists.',
+      bad_day: 'The phone’s date doesn’t look right.',
+    } as Record<string, string>)[code] ?? 'You need a connection for the shop.',
+  interstitialBody: 'A Google ad will go here between questions. This test version doesn’t show any.',
+  interstitialClose: 'Close the ad',
+  adHint: (n: number) => `Watch an ad: +${n} ${n === 1 ? 'hint' : 'hints'}`,
+  adHintFree: (n: number) => `Free hint: +${n}`,
+  adHintLabel: (label: string, left: number) => `${label}. ${left} left today`,
+  adPrivacyTitle: 'Ad privacy',
+  adPrivacyBody: 'Choose whether ads can use your data to be personalised.',
+  adPrivacyChange: 'Change my choice',
   testAdTitle: 'Test ad',
   testAdBody: 'A Google ad will go here. This test version doesn’t show any.',
   testAdIn: (s: number) => `Reward in ${s} s`,

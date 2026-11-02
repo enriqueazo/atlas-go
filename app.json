@@ -39,7 +39,24 @@
         }
       ],
       "expo-audio",
-      "expo-localization"
+      "expo-localization",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "delayAppMeasurementInit": true,
+          "skAdNetworkItems": [
+            "cstr6suwn9.skadnetwork"
+          ]
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "Atlas Go usa este permiso para mostrarte anuncios más adecuados para ti. Si no lo das, verás anuncios igualmente, pero no personalizados. / Atlas Go uses this to show you ads that suit you better. If you say no, you still see ads, just not personalised ones."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

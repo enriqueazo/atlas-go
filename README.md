@@ -49,6 +49,7 @@ The app is linked to the EAS project `atlas-go` on the `enriqueazos-team` accoun
 - `src/data/world.json`, `src/data/regions/*.json`: generated map data; don't edit by hand.
 - `src/cloud/`: Supabase: the client, the projects (`config.ts`), the account (`account.ts`), ranked games, leagues and groups (`ranked.ts`) and duels (`duels.ts`). `src/app/ranked.tsx` and `src/components/RankedGame.tsx`: the Ranked screen; `src/components/OnlineRanking.tsx`: the league and standings in the Ranking tab. `src/app/duels/`, `src/app/play-duel.tsx`, `src/app/duel/[code].tsx`: the duel screens. `supabase/migrations/`: the database tables and security rules.
 - `src/app/shop.tsx`, `src/cloud/wallet.ts`, `src/game/shop.ts`: the shop and the wallet of hints and discards; `src/components/Boosts.tsx`: the help buttons in the games; `src/components/TestAd.tsx`: the stand-in ad.
+- `src/ads/`: AdMob (consent, rewarded and full-screen ads); `src/game/adSchedule.ts`: when the full-screen ads come up; `src/components/TestInterstitial.tsx`: the stand-in full-screen ad; `supabase/functions/admob-reward/`: Google's call for each rewarded ad.
 
 ## Map data
 
@@ -161,11 +162,25 @@ copy so solo games can use it offline.
   isn't a neighbour (Neighbours).
 - A right answer with help in a three-option question is worth half.
   Ranked, duels and the map of the day never use the wallet.
-- The wallet fills up with a daily gift (1 discard), test ads (1 hint, 5 a
-  day) and test packs (10 or 50 hints or discards, and No ads). Nothing is
-  charged: real purchases need the App Store and Play accounts, and real ads
-  need AdMob in a new development build. Turn test purchases off before the
-  real launch: `update private.shop_config set test_purchases = false;`
+- The wallet fills up with a daily gift (1 discard), rewarded ads (1 hint, 5
+  a day) and test packs (10 or 50 hints or discards, and No ads). Nothing is
+  charged: real purchases need the App Store and Play accounts. Turn test
+  purchases off before the real launch:
+  `update private.shop_config set test_purchases = false;`
+
+## Ads
+
+As in Vocablo: Google AdMob (`react-native-google-mobile-ads`), with Google's
+sample ads until Atlas Go has its own ad units. Rewarded ads give a hint;
+full-screen ads come between questions in the solo modes, first after 3
+answers a day per mode, then further and further apart (`src/game/adSchedule.ts`),
+never in Ranked, duels or the Map of the day, and never with No ads. Google's
+consent form and Apple's tracking prompt come up when the app opens. With our
+own ad units, Google confirms each rewarded ad to the `admob-reward` Edge
+Function. Builds without AdMob (web, Expo Go) show test ads on the same
+schedule. What to set up in AdMob and Supabase: `docs/ads-setup.md`.
+
+Tests for the ad schedule and the reward signature: `npm test`.
 
 Until a Supabase project is set up, the wallet lives on the phone alone with
 the same rules, so the shop can be tried in Expo Go.

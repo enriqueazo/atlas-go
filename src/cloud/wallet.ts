@@ -18,6 +18,10 @@ import {
   type Wallet,
 } from '@/game/shop';
 
+import { showRewardedAd } from '@/ads/ads';
+import { OWN_AD_UNITS } from '@/ads/config';
+
+import { ensureAccount } from './account';
 import { CLOUD_READY } from './config';
 import { call, failed, type Result } from './ranked';
 
@@ -133,9 +137,42 @@ export async function claimGiftIfDue(): Promise<boolean> {
   return !failed(r) && r.granted === true;
 }
 
-/** The reward for a watched ad. */
+/** The reward for a watched test ad (the test shop only: the app vouches for the ad), or No ads' daily hints. */
 export function rewardAd() {
   return change('reward_ad', undefined, localAd);
+}
+
+/** How long to wait for Google to tell the server about a watched ad. */
+const REWARD_WAIT_MS = 20_000;
+const REWARD_POLL_MS = 1_500;
+
+/**
+ * Shows a real rewarded ad and returns the wallet with its hint, as in
+ * Vocablo. With our own ad units Google tells the server, and this waits
+ * until the hint is there; with Google's sample units (no call to our server)
+ * the test shop gives it, and without a Supabase project the phone does.
+ * Errors: 'offline', 'no_ad' (none to show), 'ad_closed' (closed early),
+ * 'ad_pending' (watched, but the hint hasn't arrived yet).
+ */
+export async function watchAdForHint(): Promise<Changed> {
+  const userId = CLOUD_READY ? await ensureAccount() : 'local';
+  if (!userId) return { error: 'offline' };
+  const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const outcome = await showRewardedAd(userId, nonce);
+  if (outcome === 'no_ad') return { error: 'no_ad' };
+  if (outcome === 'closed') return { error: 'ad_closed' };
+  if (!CLOUD_READY || !OWN_AD_UNITS) return rewardAd();
+  const until = Date.now() + REWARD_WAIT_MS;
+  while (Date.now() < until) {
+    const r = await call<ServerWallet & { found: boolean }>('ad_reward_status', { p_nonce: nonce });
+    if (!failed(r) && r.found) {
+      set(fromServer(r, wallet));
+      return wallet;
+    }
+    await new Promise((resolve) => setTimeout(resolve, REWARD_POLL_MS));
+  }
+  syncWallet();
+  return { error: 'ad_pending' };
 }
 
 /** A purchase with no store and no payment, while the shop is in test mode. */

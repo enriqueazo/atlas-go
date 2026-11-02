@@ -1,10 +1,16 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { router } from 'expo-router';
-import type { ComponentProps, ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState, type ComponentProps, type ReactNode } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { hasRealAds } from '@/ads/ads';
+import { failed } from '@/cloud/ranked';
+import { rewardAd, useWallet, watchAdForHint } from '@/cloud/wallet';
+import { AD_HINTS, ADS_PER_DAY } from '@/game/shop';
 import { useSettings } from '@/settings';
 import { fonts, radius, space, themed } from '@/theme';
+
+import { TestAd } from './TestAd';
 
 type Icon = ComponentProps<typeof MaterialCommunityIcons>['name'];
 
@@ -56,6 +62,71 @@ export function BoostButton({
   );
 }
 
+/**
+ * Once the wallet has no hints, as in Vocablo: watch a rewarded ad for one
+ * (No ads gets it without the ad). `onReward` runs once the hint is in the
+ * wallet, to use it right away. Shows nothing when today's ads are used up.
+ */
+export function AdHintButton({ onReward }: { onReward: () => void }) {
+  const { colors, styles } = useThemed();
+  const { t } = useSettings();
+  const wallet = useWallet();
+  const [busy, setBusy] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  if (wallet.adsLeft <= 0) return null;
+
+  const get = async (action: typeof rewardAd) => {
+    setBusy(true);
+    setNote(null);
+    const r = await action();
+    setBusy(false);
+    if (failed(r)) setNote(t.shopError(r.error, ADS_PER_DAY));
+    else onReward();
+  };
+
+  const press = () => {
+    if (busy) return;
+    if (wallet.adFree) get(rewardAd);
+    else if (hasRealAds()) get(watchAdForHint);
+    else setTestOpen(true);
+  };
+
+  const label = wallet.adFree ? t.adHintFree(AD_HINTS) : t.adHint(AD_HINTS);
+  return (
+    <View style={styles.adWrap}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t.adHintLabel(label, wallet.adsLeft)}
+        accessibilityState={{ disabled: busy }}
+        disabled={busy}
+        onPress={press}
+        style={({ pressed }) => [styles.adButton, pressed && { opacity: 0.8 }]}
+      >
+        {busy ? (
+          <ActivityIndicator size="small" color={colors.green} />
+        ) : (
+          <MaterialCommunityIcons
+            name={wallet.adFree ? 'lightbulb-on-outline' : 'television-play'}
+            size={18}
+            color={colors.green}
+          />
+        )}
+        <Text style={styles.adLabel}>{label}</Text>
+      </Pressable>
+      {note && <Text style={styles.adNote}>{note}</Text>}
+      <TestAd
+        visible={testOpen}
+        onClose={(watched) => {
+          setTestOpen(false);
+          if (watched) get(rewardAd);
+        }}
+      />
+    </View>
+  );
+}
+
 const useThemed = themed((colors) => ({
   colors,
   styles: StyleSheet.create({
@@ -84,5 +155,19 @@ const useThemed = themed((colors) => ({
       backgroundColor: colors.greenSoft,
     },
     countText: { color: colors.green, fontFamily: fonts.heavy, fontSize: 13 },
+    adWrap: { alignItems: 'center', gap: space(1) },
+    adButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space(2),
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.green,
+      backgroundColor: colors.greenSoft,
+      paddingHorizontal: space(4),
+      paddingVertical: space(2),
+    },
+    adLabel: { color: colors.green, fontFamily: fonts.bold, fontSize: 15 },
+    adNote: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 13, textAlign: 'center' },
   }),
 }));
